@@ -1,3 +1,7 @@
 .venv
 fix_phase1.py
 /notebooks/fixed-notebook.ipynb.backup
+fix_phase2.py
+inject_phase2.py
+context.md
+
