@@ -1,0 +1,4 @@
+antecedents,consequents,support,confidence,lift,conviction,IF (Conditions),THEN (Outcome),Support (%),Confidence (%),Lift,Conviction
+"frozenset({'Active_Status_Inactive', 'Age_Band_Senior'})",frozenset({'Churn_Status_Churned'}),0.0538,0.6836086404066073,3.35595797941388,2.5168196707600914,Active_Status_Inactive ∩ Age_Band_Senior,Churn_Status_Churned,5.38,68.4,3.356,2.517
+"frozenset({'Products_Label_Products_1', 'Age_Band_Senior'})",frozenset({'Churn_Status_Churned'}),0.0606,0.6090452261306533,2.9899127448731138,2.036808478080657,Age_Band_Senior ∩ Products_Label_Products_1,Churn_Status_Churned,6.06,60.9,2.99,2.037
+frozenset({'Age_Band_Senior'}),frozenset({'Churn_Status_Churned'}),0.0842,0.5112325440194292,2.509732665780212,1.6292001208903195,Age_Band_Senior,Churn_Status_Churned,8.42,51.1,2.51,1.629
