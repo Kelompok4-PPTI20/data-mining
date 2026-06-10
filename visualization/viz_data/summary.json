@@ -1,0 +1,93 @@
+{
+  "n_customers": 10000,
+  "baseline_churn": 20.37,
+  "famd_explained": [
+    0.3,
+    0.2
+  ],
+  "geo_churn": {
+    "France": 16.2,
+    "Germany": 32.4,
+    "Spain": 16.7
+  },
+  "cluster_profiles": [
+    {
+      "cluster": 0,
+      "name": "Low-Balance France/Spain Multi-Product Loyalists",
+      "n": 3735,
+      "pct": 37.4,
+      "churn_rate": 15.7,
+      "avg_balance": 6214.0,
+      "avg_products": 1.88,
+      "avg_age": 38.4,
+      "active_rate": 51.7,
+      "avg_tenure": 5.22,
+      "germany_pct": 2.2
+    },
+    {
+      "cluster": 1,
+      "name": "Germany-Heavy Single-Product Watchlist",
+      "n": 3161,
+      "pct": 31.6,
+      "churn_rate": 23.6,
+      "avg_balance": 115296.0,
+      "avg_products": 1.32,
+      "avg_age": 39.0,
+      "active_rate": 53.9,
+      "avg_tenure": 2.33,
+      "germany_pct": 37.7
+    },
+    {
+      "cluster": 2,
+      "name": "High-Balance Germany-Heavy Passive Holders",
+      "n": 3104,
+      "pct": 31.0,
+      "churn_rate": 22.8,
+      "avg_balance": 121520.0,
+      "avg_products": 1.33,
+      "avg_age": 39.4,
+      "active_rate": 48.9,
+      "avg_tenure": 7.5,
+      "germany_pct": 39.8
+    }
+  ],
+  "n_churn_rules": 13,
+  "anomaly_methods": [
+    {
+      "method": "IQR (1.5\u00d7IQR)",
+      "flagged": 374,
+      "pct": 3.74,
+      "churn_rate": 23.5
+    },
+    {
+      "method": "Z-score (|z|>3)",
+      "flagged": 141,
+      "pct": 1.41,
+      "churn_rate": 13.5
+    },
+    {
+      "method": "Isolation Forest",
+      "flagged": 500,
+      "pct": 5.0,
+      "churn_rate": 49.0
+    },
+    {
+      "method": "DBSCAN noise (Phase 2)",
+      "flagged": 818,
+      "pct": 8.18,
+      "churn_rate": 52.2
+    }
+  ],
+  "n_flagged": 1054,
+  "n_high_conf": 186,
+  "class_counts": {
+    "B": 583,
+    "C": 469,
+    "A": 2
+  },
+  "highbal_churners": {
+    "n": 592,
+    "avg_balance": 149755.0,
+    "germany_pct": 46.3
+  }
+}
