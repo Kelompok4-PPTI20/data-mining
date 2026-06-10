@@ -1,0 +1,100 @@
+/* Group 5 — Knowledge Discovery Dashboard · Google Looker Studio-style theme */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Roboto, "Google Sans", "Segoe UI", Arial, sans-serif;
+  background: #f1f3f4;                 /* Looker canvas grey */
+  color: #202124;
+}
+
+/* ── App bar (white, Looker report header) ─────────────────────────────────── */
+.header { background: #ffffff; border-bottom: 1px solid #dadce0; padding: 18px 32px 14px; }
+.header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 500; color: #202124; letter-spacing: .1px; }
+.header .byline, .header > p { margin: 0 0 14px; color: #5f6368; font-size: 13px; }
+
+/* Scorecards (Looker KPI cards) */
+.kpi-strip { display: flex; gap: 12px; flex-wrap: wrap; }
+.kpi-card { background: #ffffff; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 10px 16px 8px; min-width: 152px; }
+.kpi-value { font-size: 24px; font-weight: 500; color: #202124; }
+.kpi-label { font-size: 11px; font-weight: 500; color: #5f6368; margin-top: 2px;
+  text-transform: uppercase; letter-spacing: .6px; }
+.kpi-sub { font-size: 11px; color: #80868b; margin-top: 1px; }
+
+/* ── Page tabs (Looker pages: blue underline on white) ─────────────────────── */
+.looker-tabs { background: #ffffff !important; border-bottom: 1px solid #dadce0;
+  padding: 0 24px; }
+.looker-tab {
+  background: #ffffff !important; border: none !important;
+  color: #5f6368 !important; font-size: 13.5px; font-weight: 500;
+  padding: 13px 18px !important; letter-spacing: .2px;
+}
+.looker-tab:hover { background: #f8f9fa !important; color: #202124 !important; }
+.looker-tab--selected {
+  background: #ffffff !important; border: none !important;
+  border-bottom: 3px solid #1a73e8 !important;
+  color: #1a73e8 !important; font-weight: 500;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+.tab-body { padding: 20px 32px 44px; max-width: 1500px; margin: 0 auto; }
+.row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+.col-7, .col-5, .col-6, .control-strip {
+  background: #ffffff; border: 1px solid #dadce0; border-radius: 8px;
+  box-shadow: none;
+}
+.col-7 { flex: 7 1 560px; min-width: 460px; padding: 14px; }
+.col-5 { flex: 5 1 380px; min-width: 340px; padding: 16px; }
+.col-6 { flex: 1 1 440px; min-width: 400px; padding: 14px; }
+.control-strip { padding: 10px 16px 12px; }
+label { font-size: 11px; font-weight: 500; color: #5f6368; display: block;
+  margin-bottom: 5px; text-transform: uppercase; letter-spacing: .6px; }
+.fineprint { font-size: 11.5px; color: #80868b; margin-top: 10px; }
+h4 { color: #202124; font-weight: 500; }
+
+/* Looker-style controls */
+.Select-control, .Select--single > .Select-control {
+  border: 1px solid #dadce0 !important; border-radius: 4px !important;
+  font-size: 13px; color: #202124;
+}
+.Select-control:hover { border-color: #bdc1c6 !important; box-shadow: none !important; }
+.is-focused:not(.is-open) > .Select-control {
+  border-color: #1a73e8 !important; box-shadow: 0 0 0 1px #1a73e8 !important; }
+input[type='checkbox'] { accent-color: #1a73e8; }
+.rc-slider-track { background-color: #1a73e8 !important; }
+.rc-slider-handle { border-color: #1a73e8 !important; }
+.rc-slider-dot-active { border-color: #1a73e8 !important; }
+
+/* ── Discovery tab ─────────────────────────────────────────────────────────── */
+.question-banner { background: #ffffff; border: 1px solid #dadce0;
+  border-left: 5px solid #1a73e8; border-radius: 8px; padding: 20px 26px; }
+.question-banner h2 { margin: 0 0 8px; font-size: 19px; font-weight: 500; color: #202124; }
+.lede { font-size: 14px; color: #3c4043; margin: 0; max-width: 980px; line-height: 1.55; }
+
+.disco-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px; margin-top: 16px; }
+.disco-card { background: #ffffff; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 18px 20px; }
+.disco-card h3 { margin: 8px 0 4px; font-size: 15.5px; font-weight: 500; color: #202124; }
+.disco-card p { font-size: 13px; color: #3c4043; line-height: 1.55; }
+.disco-tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: #1a73e8; background: #e8f0fe; border-radius: 12px;
+  padding: 3px 10px; }
+.disco-stat { font-size: 20px; font-weight: 500; color: #d93025; margin: 4px 0 4px; }
+.disco-action { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 6px;
+  padding: 10px 12px; }
+
+/* ── Persona panel ─────────────────────────────────────────────────────────── */
+.persona-card { margin-top: 12px; }
+.persona-head { display: flex; align-items: center; gap: 10px; }
+.persona-head h3 { margin: 0; font-size: 15px; font-weight: 500; }
+.persona-chip { color: #fff; font-weight: 500; border-radius: 6px; padding: 4px 9px; font-size: 12.5px; }
+.profile-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+.profile-table th { text-align: left; background: #f8f9fa; padding: 8px 10px;
+  color: #5f6368; font-weight: 500; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .4px; border-bottom: 1px solid #dadce0; }
+.profile-table td { padding: 8px 10px; border-bottom: 1px solid #f1f3f4; }
+.strong { font-weight: 700; }
+
+/* ── Footer ────────────────────────────────────────────────────────────────── */
+.footer { text-align: center; font-size: 11.5px; color: #80868b; padding: 16px 0 26px; }
