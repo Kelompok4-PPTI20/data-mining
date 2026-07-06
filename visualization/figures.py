@@ -58,7 +58,7 @@ def ov_bar(labels, values, colors, height=225, suffix="%", texts=None):
 OV_SENIOR = ov_bar(
     ["All customers", "Senior (46-60)", "Senior + inactive", "Senior + inactive + 1 product"],
     [BASELINE, M["churn_by"]["Age_Band"]["churn_pct"][2], 68.4, 77.3],
-    ["#bdc7d1", T.AMBER, "#f26b4f", T.RED])
+    ["#B7BEC9", T.AMBER, "#EC6142", T.RED])
 
 OV_GEO = ov_bar(
     [f"{l}  ({t:,} customers)" for l, t in zip(M["churn_by"]["Geography"]["labels"],
@@ -70,12 +70,12 @@ OV_PROD = ov_bar(
     [f"{l} product{'s' if l != '1' else ''}  ({t:,})" for l, t in
      zip(M["churn_by"]["NumOfProducts"]["labels"], M["churn_by"]["NumOfProducts"]["total"])],
     M["churn_by"]["NumOfProducts"]["churn_pct"],
-    [T.AMBER, T.GREEN, T.RED, "#7b1a12"])
+    [T.AMBER, T.GREEN, T.RED, "#A61B37"])
 
 OV_COMBO = ov_bar(
     ["Not an outlier", "Extreme on ONE value", "Extreme + unusual combo", "Unusual COMBINATION only"],
     M["uni_mv"]["churn_pct"],
-    ["#bdc7d1", "#9ec3f7", T.AMBER, T.RED])
+    ["#B7BEC9", "#7FA0FF", T.AMBER, T.RED])
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ DIST_INSIGHTS = {
 def make_dist_fig(col):
     fig = _base(300)
     nbins = {"NumOfProducts": 4, "Tenure": 11}.get(col, 45)
-    for status, color in [("Retained", "#9ec3f7"), ("Churned", T.RED)]:
+    for status, color in [("Retained", "#7FA0FF"), ("Churned", T.RED)]:
         sub = REC.loc[REC["Churn_Status"] == status, col]
         fig.add_histogram(x=sub, name=status, nbinsx=nbins, histnorm="percent",
                           marker_color=color, opacity=0.62,
@@ -185,14 +185,14 @@ def make_featsel_fig():
                         subplot_titles=("Lens 1 - Correlation  (Pearson |r|)",
                                         "Lens 2 - Entropy  (mutual information & info gain, bits)"))
     fig.add_bar(y=feats, x=[p if p is not None else 0 for p in pear], orientation="h",
-                marker_color=["#c6dafc" if p is None else T.BLUE for p in pear],
+                marker_color=["#D8E1FF" if p is None else T.BLUE for p in pear],
                 text=["n/a (nominal)" if p is None else f"{p:.3f}" for p in pear],
                 textposition="outside", textfont=dict(size=10.5),
                 name="Pearson |r|", row=1, col=1, hoverinfo="skip")
     fig.add_bar(y=feats, x=mi, orientation="h", marker_color=T.PURPLE, name="Mutual information",
                 text=[f"{v:.3f}" for v in mi], textposition="outside",
                 textfont=dict(size=10.5), row=1, col=2, hoverinfo="skip")
-    fig.add_bar(y=feats, x=ig, orientation="h", marker_color="#d0a9f5", name="Information gain",
+    fig.add_bar(y=feats, x=ig, orientation="h", marker_color="#C7B5FD", name="Information gain",
                 row=1, col=2, hovertemplate="info gain %{x:.4f} bits<extra></extra>")
     fig.update_layout(height=380, barmode="group", bargap=0.28,
                       legend=dict(y=1.12), margin=dict(l=10, r=20, t=42, b=10),
@@ -335,7 +335,7 @@ def make_effect_fig():
     rows = sorted(best.values(), key=lambda r: r["effect"])
     fig = _base(330)
     fig.add_bar(y=[r["feature"] for r in rows], x=[r["effect"] for r in rows], orientation="h",
-                marker_color=[T.BLUE if r["effect"] >= 0.14 else "#cdd3da" for r in rows],
+                marker_color=[T.BLUE if r["effect"] >= 0.14 else "#D3D9E1" for r in rows],
                 text=[f"{r['effect']:.2f}" for r in rows], textposition="outside",
                 textfont=dict(size=10.5),
                 customdata=[f"{r['test']} - {r['metric']}" for r in rows],
@@ -366,7 +366,7 @@ def make_cluster_churn_fig():
                 showlegend=False)
     _baseline_hline(fig, row=1, col=1)
 
-    geo_colors = {"France": T.BLUE, "Germany": T.RED, "Spain": T.AMBER}
+    geo_colors = {"France": T.BLUE, "Germany": T.RED, "Spain": "#E8A93B"}
     for geo in ["France", "Germany", "Spain"]:
         fig.add_bar(y=names, x=[M["clusters"][str(k)]["geo_mix"][geo] for k in ks],
                     orientation="h", name=geo, marker_color=geo_colors[geo],
@@ -423,7 +423,7 @@ def make_rule_network():
             rx, ry = R_RULE * np.cos(rule_angle[i]), R_RULE * np.sin(rule_angle[i])
             ex += [ix, rx, None]
             ey += [iy, ry, None]
-    fig.add_scatter(x=ex, y=ey, mode="lines", line=dict(color="#d5dbe3", width=1.1),
+    fig.add_scatter(x=ex, y=ey, mode="lines", line=dict(color="#D3D9E1", width=1.1),
                     hoverinfo="skip", showlegend=False)
 
     # edges rule -> churn (width & color by lift)
@@ -458,7 +458,7 @@ def make_rule_network():
         mode="markers+text", text=[r["letter"] for r in rules],
         textfont=dict(size=10, color="white", family=T.FONT),
         textposition="middle center",
-        marker=dict(size=21, color=[T.RED if r["lift"] >= 3.2 else "#f26b4f" if r["lift"] >= 2.9
+        marker=dict(size=21, color=[T.RED if r["lift"] >= 3.2 else "#EC6142" if r["lift"] >= 2.9
                                     else T.AMBER for r in rules],
                     symbol="diamond", line=dict(color="white", width=1.5)),
         customdata=[[" + ".join(r["if_items"]), r["confidence_pct"], r["lift"], r["customers"]]
@@ -471,7 +471,7 @@ def make_rule_network():
     # churn node
     fig.add_scatter(x=[0], y=[0], mode="markers+text", text=["CHURN"],
                     textfont=dict(size=11, color="white"), textposition="middle center",
-                    marker=dict(size=52, color=T.RED, line=dict(color="#a50e0e", width=2)),
+                    marker=dict(size=52, color=T.RED, line=dict(color="#A61B37", width=2)),
                     hovertemplate="All 10 rules point here: customer leaves the bank<extra></extra>",
                     showlegend=False)
 
@@ -499,7 +499,7 @@ def make_rule_scatter():
         mode="markers+text", text=[r["letter"] for r in rules],
         textposition="top center", textfont=dict(size=11, color=T.INK2),
         marker=dict(size=sizes, color=[len(r["if_items"]) for r in rules],
-                    colorscale=[[0, "#7cacf8"], [0.5, T.BLUE], [1, T.BLUE_D]],
+                    colorscale=[[0, "#7FA0FF"], [0.5, T.BLUE], [1, T.BLUE_D]],
                     opacity=0.85, line=dict(color="white", width=1.5),
                     showscale=False),
         customdata=[[" + ".join(r["if_items"]), r["customers"], r["support_pct"], len(r["if_items"])]
@@ -527,7 +527,7 @@ def make_method_fig():
     fig = _base(340)
     fig.add_bar(
         y=[r["method"] for r in rows], x=[r["churn_pct"] for r in rows], orientation="h",
-        marker_color=[T.BLUE if r["family"] == "Multivariate" else "#aab4c0" for r in rows],
+        marker_color=[T.BLUE if r["family"] == "Multivariate" else "#B7BEC9" for r in rows],
         text=[f"{r['churn_pct']}%  ({r['flagged']:,} flagged)" for r in rows],
         textposition="outside", textfont=dict(size=11),
         customdata=[[r["flagged"], r["pct"], r["family"]] for r in rows],
@@ -547,7 +547,7 @@ METHOD_FIG = make_method_fig()
 def make_composite_fig():
     c = M["composite"]
     fig = _base(320)
-    colors = ["#bdc7d1", T.AMBER, T.RED, "#8f6f56", "#8f6f56"]
+    colors = ["#B7BEC9", T.AMBER, T.RED, "#8A93A3", "#8A93A3"]
     fig.add_bar(x=[str(s) for s in c["scores"]], y=c["churn_pct"],
                 marker_color=colors,
                 text=[f"{v}%<br><span style='font-size:10px'>n={n:,}</span>"
@@ -577,7 +577,7 @@ def make_unimv_fig():
               "Both families", "Multivariate only<br>(unusual combination)"]
     fig = _base(320)
     fig.add_bar(x=labels, y=u["churn_pct"],
-                marker_color=["#bdc7d1", "#9ec3f7", T.AMBER, T.RED],
+                marker_color=["#B7BEC9", "#7FA0FF", T.AMBER, T.RED],
                 text=[f"{v}%<br><span style='font-size:10px'>n={n:,}</span>"
                       for v, n in zip(u["churn_pct"], u["n"])],
                 textposition="outside", textfont=dict(size=11),
@@ -604,7 +604,7 @@ def make_outlier_scatter(colorby):
                      f"{status} ({m.sum():,})", T.CHURN_COLORS[status],
                      opacity=0.35 if status == "Retained" else 0.55, hover=hover[m])
     else:
-        groups = [("Normal — Not Flagged", "Not flagged", "#c3cdd9", 3.0, 0.3),
+        groups = [("Normal — Not Flagged", "Not flagged", "#B7BEC9", 3.0, 0.3),
                   ("B:", "B - Rare but legitimate", T.AMBER, 4.5, 0.75),
                   ("C:", "C - RISK SIGNAL", T.RED, 4.5, 0.8),
                   ("A:", "A - Suspected data error", T.PURPLE, 9, 1.0)]

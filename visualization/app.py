@@ -9,7 +9,7 @@ to a non-technical audience: what was mined, what was found, and what it means.
 
 Design notes
 ------------
-* Google / Looker-Studio visual language (see assets/styles.css + theme.py).
+* Visual language implements the KDD Design Spec v1.0 (assets/styles.css + theme.py).
 * All figures are precomputed at startup; callbacks only swap ready objects,
   so every interaction responds in well under the 100 ms rubric budget.
 * Every chart card ends with a plain-language "What this tells us" strip -
@@ -30,7 +30,7 @@ app = Dash(
     suppress_callback_exceptions=True,
     title="Churn KDD Dashboard — Group 5",
     external_stylesheets=[
-        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
     ],
 )
 
@@ -226,8 +226,8 @@ phase2 = html.Div([
              "all features on one comparable scale.",
              C.graph(F.SNAKE_FIG),
              insight(["The three lines only fan apart on Balance and NumOfProducts — the same "
-                      "verdict as the effect sizes, from a third angle. C1 (red) = high balance, "
-                      "one product; C2 (green) = zero balance, multi-product; C0 (amber) = high "
+                      "verdict as the effect sizes, from a third angle. C1 (purple) = high balance, "
+                      "one product; C2 (teal) = zero balance, multi-product; C0 (cobalt) = high "
                       "on both."])),
         card("Churn and geography by segment",
              "Left: the churn validation lens (never used to form clusters). Right: where each "
@@ -260,8 +260,7 @@ hyp = M["hypothesis"]
 
 phase3 = html.Div([
     html.Div([
-        html.Div("ASSIGNED HYPOTHESIS — CONFIRMED ✓", className="hero-kicker",
-                 style={"color": T.GREEN}),
+        html.Div("ASSIGNED HYPOTHESIS — CONFIRMED ✓", className="hero-kicker"),
         html.Div("“Customers from Germany holding only one product who are inactive represent a "
                  "strong churn profile.”", className="hero-q", style={"fontSize": "18px"}),
         html.Div([
@@ -272,7 +271,7 @@ phase3 = html.Div([
             "German retention problem is real, and Phase 3 shows it is one of TWO independent "
             "risk vectors (the other is senior age) that compound when combined.",
         ], className="hero-a"),
-    ], className="hero", style={"background": "linear-gradient(135deg,#e6f4ea 0%,#ffffff 55%)"}),
+    ], className="hero hero--success"),
 
     html.Div([
         kpi("3,972", "Frequent itemsets", "Apriori, min support 3% (≥ ~300 customers)"),
@@ -565,36 +564,47 @@ report = html.Div([
 # ===========================================================================
 
 app.layout = html.Div([
-    html.Div([
+    # ── application shell · header 56px (sticky) ──────────────────────────
+    html.Header(html.Div([
         html.Div([
-            html.Div([html.Span(style={"background": c}) for c in
-                      [T.BLUE, T.RED, T.AMBER, T.GREEN]], className="logo-dots"),
+            html.Div("✓", className="brand-mark"),
+            html.Span("KDD", className="brand-word"),
+            html.Span("GROUP 5", className="env-chip"),
+        ], className="brand-zone"),
+        html.Div([
+            html.Div("Bank Customer Churn — Knowledge Discovery", className="hdr-title"),
+            html.Div("10,000 retail customers · France · Germany · Spain · KDD Phases 1–5",
+                     className="hdr-sub"),
+        ], className="hdr-context"),
+        html.Div([
+            html.Div("Data Mining · Phase 5 deliverable", className="hdr-meta-line"),
+            html.Div("discovery over prediction", className="hdr-meta-sub"),
+        ], className="hdr-meta"),
+    ], className="hdr-row"), className="app-header"),
+
+    # ── sidebar 248px + scrolling canvas ──────────────────────────────────
+    html.Div([
+        html.Nav([
+            html.Div("Workspace", className="side-label"),
+            dcc.RadioItems(
+                id="tabs", value="overview", className="side-nav",
+                options=[
+                    {"label": "The Discovery", "value": "overview"},
+                    {"label": "Data & Preprocessing", "value": "ph1"},
+                    {"label": "Customer Segments", "value": "ph2"},
+                    {"label": "Churn Rules", "value": "ph3"},
+                    {"label": "Anomalies", "value": "ph4"},
+                    {"label": "Knowledge Report", "value": "report"},
+                ]),
             html.Div([
-                html.Div("Bank Customer Churn — Knowledge Discovery", className="appbar-title"),
-                html.Div("KDD pipeline · 10,000 retail customers · France · Germany · Spain",
-                         className="appbar-sub"),
-            ]),
-            html.Div([
-                html.Div([html.B("Group 5"), " · Data Mining · Phase 5 deliverable"]),
-                html.Div("Discovery over prediction — every number traces to the notebook"),
-            ], className="appbar-meta"),
-        ], className="appbar-row"),
-        html.Div(dcc.Tabs(id="tabs", value="overview", className="custom-tabs", children=[
-            dcc.Tab(label="✦ The Discovery", value="overview",
-                    className="ctab", selected_className="ctab--selected"),
-            dcc.Tab(label="1 · Data & Preprocessing", value="ph1",
-                    className="ctab", selected_className="ctab--selected"),
-            dcc.Tab(label="2 · Customer Segments", value="ph2",
-                    className="ctab", selected_className="ctab--selected"),
-            dcc.Tab(label="3 · Churn Rules", value="ph3",
-                    className="ctab", selected_className="ctab--selected"),
-            dcc.Tab(label="4 · Anomalies", value="ph4",
-                    className="ctab", selected_className="ctab--selected"),
-            dcc.Tab(label="5 · Knowledge Report", value="report",
-                    className="ctab", selected_className="ctab--selected"),
-        ]), className="tabs-holder"),
-    ], className="appbar"),
-    html.Div(id="tab-content"),
+                html.Div("KDD PIPELINE", className="side-foot-overline"),
+                html.Div("Phases 1–4 mined in Jupyter (random_state 42, all 10,000 records); "
+                         "every number here traces to the notebook.",
+                         className="side-foot-text"),
+            ], className="side-foot"),
+        ], className="sidebar"),
+        html.Main(html.Div(id="tab-content"), className="canvas"),
+    ], className="app-body"),
 ])
 
 PAGES = {"overview": overview, "ph1": phase1, "ph2": phase2,
