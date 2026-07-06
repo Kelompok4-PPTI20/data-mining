@@ -1,0 +1,335 @@
+{
+ "top10": [
+  {
+   "rank": 1,
+   "letter": "A",
+   "if_items": [
+    "1 product only",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Age_Band_Senior",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 4.05,
+   "confidence_pct": 77.3,
+   "lift": 3.794,
+   "conviction": 3.506,
+   "customers": 405,
+   "commentary": "The single strongest churn profile found. Inactive seniors holding only one product churn at ~77% - nearly 4x the 20.4% base rate. Action: proactive retention call before a second consecutive inactive quarter, plus a bundled-product offer."
+  },
+  {
+   "rank": 2,
+   "letter": "B",
+   "if_items": [
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Age_Band_Senior"
+   ],
+   "then": "Churned",
+   "support_pct": 5.38,
+   "confidence_pct": 68.4,
+   "lift": 3.356,
+   "conviction": 2.517,
+   "customers": 538,
+   "commentary": "Inactivity alone is a much weaker signal - it is the AGE interaction that drives risk. Seniors who go quiet tend to disengage permanently, while younger inactive customers often re-engage on their own."
+  },
+  {
+   "rank": 3,
+   "letter": "C",
+   "if_items": [
+    "Has credit card",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Age_Band_Senior",
+    "CrCard_Status_Has_CrCard"
+   ],
+   "then": "Churned",
+   "support_pct": 3.78,
+   "confidence_pct": 67.6,
+   "lift": 3.32,
+   "conviction": 2.459,
+   "customers": 378,
+   "commentary": "Holding a credit card does not protect inactive seniors at all - the card is a shallow anchor. Risk is essentially identical to the card-free version of this profile."
+  },
+  {
+   "rank": 4,
+   "letter": "D",
+   "if_items": [
+    "Germany",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "Geography_Germany"
+   ],
+   "then": "Churned",
+   "support_pct": 3.38,
+   "confidence_pct": 67.3,
+   "lift": 3.305,
+   "conviction": 2.437,
+   "customers": 338,
+   "commentary": "The most surprising rule: German seniors churn at >3x baseline regardless of activity or product count. It points to a product-fit or service-quality issue specific to the German operation, not just an age effect."
+  },
+  {
+   "rank": 5,
+   "letter": "E",
+   "if_items": [
+    "1 product only",
+    "Female",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "Gender_Female",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 3.23,
+   "confidence_pct": 66.5,
+   "lift": 3.263,
+   "conviction": 2.374,
+   "customers": 323,
+   "commentary": "A gender-age interaction invisible in simple cross-tabs: female seniors with a single product churn at 66%. Combine cross-sell with age-appropriate engagement."
+  },
+  {
+   "rank": 6,
+   "letter": "F",
+   "if_items": [
+    "1 product only",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 6.06,
+   "confidence_pct": 60.9,
+   "lift": 2.99,
+   "conviction": 2.037,
+   "customers": 606,
+   "commentary": "Single-product seniors churn at 61%. Cross-sell is the obvious lever - and the data shows the bank has historically failed to deepen exactly this segment."
+  },
+  {
+   "rank": 7,
+   "letter": "G",
+   "if_items": [
+    "1 product only",
+    "Has credit card",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "CrCard_Status_Has_CrCard",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 4.18,
+   "confidence_pct": 59.9,
+   "lift": 2.94,
+   "conviction": 1.985,
+   "customers": 418,
+   "commentary": "A credit card does NOT reduce churn risk for single-product seniors. Card-only relationships are shallow relationships."
+  },
+  {
+   "rank": 8,
+   "letter": "H",
+   "if_items": [
+    "Female",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "Gender_Female"
+   ],
+   "then": "Churned",
+   "support_pct": 4.71,
+   "confidence_pct": 57.3,
+   "lift": 2.813,
+   "conviction": 1.865,
+   "customers": 471,
+   "commentary": "Senior + female alone - without inactivity or product-count conditions - already clears the 2.5x lift bar. The two demographics compound."
+  },
+  {
+   "rank": 9,
+   "letter": "I",
+   "if_items": [
+    "Mid balance (50-125K)",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "Balance_Band_Mid_Balance"
+   ],
+   "then": "Churned",
+   "support_pct": 3.67,
+   "confidence_pct": 56.2,
+   "lift": 2.759,
+   "conviction": 1.818,
+   "customers": 367,
+   "commentary": "Mid-balance (50-125K) seniors are at risk while high-balance seniors are noticeably less so: the bank retains the wealthy and loses the middle."
+  },
+  {
+   "rank": 10,
+   "letter": "J",
+   "if_items": [
+    "Female",
+    "Has credit card",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Age_Band_Senior",
+    "CrCard_Status_Has_CrCard",
+    "Gender_Female"
+   ],
+   "then": "Churned",
+   "support_pct": 3.14,
+   "confidence_pct": 55.3,
+   "lift": 2.714,
+   "conviction": 1.781,
+   "customers": 314,
+   "commentary": "Female senior cardholders - the same story again: the card alone does not anchor the relationship."
+  }
+ ],
+ "all_churn_rules": [
+  {
+   "if_items": [
+    "1 product only",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "support_pct": 4.05,
+   "confidence_pct": 77.3,
+   "lift": 3.794
+  },
+  {
+   "if_items": [
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "support_pct": 4.05,
+   "confidence_pct": 51.5,
+   "lift": 3.652
+  },
+  {
+   "if_items": [
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "support_pct": 5.38,
+   "confidence_pct": 68.4,
+   "lift": 3.356
+  },
+  {
+   "if_items": [
+    "Has credit card",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.78,
+   "confidence_pct": 67.6,
+   "lift": 3.32
+  },
+  {
+   "if_items": [
+    "Germany",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.38,
+   "confidence_pct": 67.3,
+   "lift": 3.305
+  },
+  {
+   "if_items": [
+    "1 product only",
+    "Female",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.23,
+   "confidence_pct": 66.5,
+   "lift": 3.263
+  },
+  {
+   "if_items": [
+    "1 product only",
+    "Senior (46-60)"
+   ],
+   "support_pct": 6.06,
+   "confidence_pct": 60.9,
+   "lift": 2.99
+  },
+  {
+   "if_items": [
+    "1 product only",
+    "Has credit card",
+    "Senior (46-60)"
+   ],
+   "support_pct": 4.18,
+   "confidence_pct": 59.9,
+   "lift": 2.94
+  },
+  {
+   "if_items": [
+    "Female",
+    "Senior (46-60)"
+   ],
+   "support_pct": 4.71,
+   "confidence_pct": 57.3,
+   "lift": 2.813
+  },
+  {
+   "if_items": [
+    "Mid balance (50-125K)",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.67,
+   "confidence_pct": 56.2,
+   "lift": 2.759
+  },
+  {
+   "if_items": [
+    "Female",
+    "Has credit card",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.14,
+   "confidence_pct": 55.3,
+   "lift": 2.714
+  },
+  {
+   "if_items": [
+    "1 product only",
+    "Germany",
+    "Inactive member"
+   ],
+   "support_pct": 3.75,
+   "confidence_pct": 52.1,
+   "lift": 2.557
+  },
+  {
+   "if_items": [
+    "Senior (46-60)"
+   ],
+   "support_pct": 8.42,
+   "confidence_pct": 51.1,
+   "lift": 2.51
+  }
+ ],
+ "thresholds": {
+  "min_support": 0.03,
+  "min_confidence": 0.5,
+  "min_lift": 1.5
+ },
+ "n_total_rules": 520,
+ "n_churn_rules": 13
+}

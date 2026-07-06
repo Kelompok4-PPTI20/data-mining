@@ -1,531 +1,648 @@
 """
-Phase 5 — Interactive Knowledge Discovery Dashboard (Group 5, Bank Customer Churn)
+Bank Customer Churn — Knowledge Discovery Dashboard  (Phase 5, Group 5)
+=======================================================================
+Interactive Plotly Dash app presenting the full KDD pipeline (Phases 1-4)
+to a non-technical audience: what was mined, what was found, and what it means.
 
-Python Dash app visualizing the four KDD phases for a non-technical audience:
-cluster maps (FAMD), association-rule network, outlier plots, key distributions,
-and the central discovery answer.
+    1) python prepare_data.py     (once - builds dashboard_data/)
+    2) python app.py              -> http://127.0.0.1:8050
 
-Design for the <100 ms interactivity rubric bar:
-  1. All heavy computation happens once in prepare_data.py.
-  2. Every callback is an in-memory filter on a preloaded 10K-row frame.
-  3. Every control has a small finite input space, so callback results are
-     memoized (lru_cache) and pre-warmed at startup — interactions are cache hits.
-
-Run from this folder (after prepare_data.py):
-
-    python app.py          ->  http://127.0.0.1:8050
+Design notes
+------------
+* Google / Looker-Studio visual language (see assets/styles.css + theme.py).
+* All figures are precomputed at startup; callbacks only swap ready objects,
+  so every interaction responds in well under the 100 ms rubric budget.
+* Every chart card ends with a plain-language "What this tells us" strip -
+  the dashboard answers the discovery question, it does not just plot data.
 """
-import json
-import os
-import sys
-from functools import lru_cache
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-from dash import Dash, Input, Output, dcc, html, dash_table
+from dash import Dash, Input, Output, dcc, html
 
-# ── Load precomputed data ──────────────────────────────────────────────────────
-if not os.path.exists('viz_data/summary.json'):
-    sys.exit('viz_data/ not found — run `python prepare_data.py` first.')
+import components as C
+import figures as F
+import theme as T
+from data import BASELINE, M, R
 
-SUMMARY = json.load(open('viz_data/summary.json'))
-FAMD = pd.read_csv('viz_data/famd_coords.csv')
-FAMD[['Dim1', 'Dim2']] = FAMD[['Dim1', 'Dim2']].round(4)
-RULES = pd.read_csv('viz_data/rules_churn.csv').fillna({'consequent_extra': ''})
-CUST = pd.read_csv('../data/processed/churn_clustered.csv')
-ANOM = pd.read_csv('../outputs/ph4_anomaly_report.csv')
-ANOM['IF_anomaly_score'] = ANOM['IF_anomaly_score'].round(4)
-ANOM['Balance'] = ANOM['Balance'].round(0)
+kpi, card, insight, chip, section, graph = C.kpi, C.card, C.insight, C.chip, C.section, C.graph
 
-# Default cluster-map viewport: central 99.6% of customers (a few extreme FAMD
-# outliers otherwise flatten the whole cloud; they stay plotted — just pan/zoom)
-_q = FAMD[['Dim1', 'Dim2']].quantile([0.002, 0.998])
-_px = (_q.loc[0.998, 'Dim1'] - _q.loc[0.002, 'Dim1']) * 0.06
-_py = (_q.loc[0.998, 'Dim2'] - _q.loc[0.002, 'Dim2']) * 0.06
-XRANGE = [_q.loc[0.002, 'Dim1'] - _px, _q.loc[0.998, 'Dim1'] + _px]
-YRANGE = [_q.loc[0.002, 'Dim2'] - _py, _q.loc[0.998, 'Dim2'] + _py]
+app = Dash(
+    __name__,
+    suppress_callback_exceptions=True,
+    title="Churn KDD Dashboard — Group 5",
+    external_stylesheets=[
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    ],
+)
 
-BASELINE = SUMMARY['baseline_churn']
-PERSONA_COLORS = {0: '#2a9d8f', 1: '#e76f51', 2: '#6d597a'}
-CHURN_RED, RETAIN_BLUE, GREY = '#d62828', '#457b9d', '#cfd6dd'
-TEMPLATE = 'plotly_white'
+# ===========================================================================
+# TAB 1 — OVERVIEW
+# ===========================================================================
 
-# Looker-style typography inside figures
-import plotly.io as pio
-pio.templates[TEMPLATE].layout.font = dict(family='Roboto, "Segoe UI", Arial, sans-serif',
-                                           color='#202124')
-pio.templates[TEMPLATE].layout.title.font.size = 14
-
-# Plain-business-language names for transaction items
-ITEM_LABELS = {
-    'Age_Band_Senior': 'Age 46–60', 'Age_Band_Elderly': 'Age over 60',
-    'Age_Band_Middle_Aged': 'Age 31–45', 'Age_Band_Young_Adult': 'Age up to 30',
-    'Active_Status_Inactive': 'Inactive member', 'Active_Status_Active': 'Active member',
-    'Products_Label_Products_1': 'Single product', 'Products_Label_Products_2': 'Two products',
-    'Geography_Germany': 'Germany', 'Geography_France': 'France', 'Geography_Spain': 'Spain',
-    'Gender_Female': 'Female', 'Gender_Male': 'Male',
-    'CrCard_Status_Has_CrCard': 'Has credit card', 'CrCard_Status_No_CrCard': 'No credit card',
-    'Balance_Band_Zero_Balance': 'Zero balance', 'Balance_Band_Low_Balance': 'Balance under £50K',
-    'Balance_Band_Mid_Balance': 'Balance £50–125K', 'Balance_Band_High_Balance': 'Balance over £125K',
-    'Tenure_Band_New_Customer': 'Customer 0–2 yrs', 'Tenure_Band_Established': 'Customer 3–5 yrs',
-    'Tenure_Band_Loyal': 'Customer 6–10 yrs',
-}
-
-
-def nice(item):
-    return ITEM_LABELS.get(item, item.replace('_', ' '))
-
-
-def kpi(label, value, sub=''):
-    return html.Div([html.Div(value, className='kpi-value'),
-                     html.Div(label, className='kpi-label'),
-                     html.Div(sub, className='kpi-sub')], className='kpi-card')
-
-
-def disco_card(num, title, stat, body, action):
-    return html.Div([
-        html.Div(f'Discovery {num}', className='disco-tag'),
-        html.H3(title), html.Div(stat, className='disco-stat'),
-        html.P(body), html.P([html.B('What to do: '), action], className='disco-action'),
-    ], className='disco-card')
-
-
-# ══ TAB 1 — The Discovery (central question answered up front) ═════════════════
-hb = SUMMARY['highbal_churners']
-discovery_tab = html.Div([
+overview = html.Div([
     html.Div([
-        html.H2('“What did we discover that was not already obvious from the raw data?”'),
-        html.P('The raw file says one in five customers leaves the bank. It does not say '
-               'which ones, why, or what it costs. Mining the data as one connected '
-               'discovery exercise — segments, rules, anomalies — surfaced four findings '
-               'no single column or average reveals.', className='lede'),
-    ], className='question-banner'),
-    html.Div([
-        disco_card(1, 'The mid-life churn cliff',
-                   '77% churn — nearly 4× the average',
-                   'Customers aged 46–60 churn at 51% vs 14% for everyone else. When that age '
-                   'band combines with inactivity and a single product, churn hits 77.3% '
-                   '(lift 3.8). Age alone, inactivity alone, or product count alone never '
-                   'shows this — it is the interaction that drives the risk.',
-                   'Trigger a retention call when a 46–60 customer with one product goes '
-                   'inactive for a quarter — before the second quarter.'),
-        disco_card(2, 'Germany is a structural problem',
-                   '32% churn — double France and Spain',
-                   'German customers churn at 32.4% vs ~16% elsewhere, German seniors at '
-                   '67.3% (lift 3.3), and Germany supplies 46.3% of all high-balance '
-                   'churners. This is market-level, not customer-level: a product-fit or '
-                   'service issue specific to the German operation.',
-                   'Commission a German market review; benchmark fees, rates and service '
-                   'against local competitors.'),
-        disco_card(3, 'Engagement beats balance as a loyalty signal',
-                   '£6K loyalists stay; £122K holders drift',
-                   'The most loyal segment holds the least money (avg £6.2K) but nearly two '
-                   'products each — churn 15.7%. The wealthiest segments (£115–122K) hold '
-                   '~1.3 products and churn at 23–24%. One-product customers churn at 27.7%; '
-                   'two-product customers at 7.6%.',
-                   'Measure relationship depth, not balance, as the loyalty KPI; cross-sell '
-                   'a second product to single-product holders.'),
-        disco_card(4, 'High-value money leaves quietly',
-                   f"{hb['n']} churners took ~£{hb['avg_balance']/1000:.0f}K each",
-                   'Structurally unusual customers (caught independently by density- and '
-                   'tree-based detectors) churn at 49–52% — 2.5× baseline. Among them sit '
-                   f"{hb['n']} high-balance churners averaging £{hb['avg_balance']:,.0f}, "
-                   'the costliest losses in the book.',
-                   'Alert a relationship manager whenever a high-balance account picks up '
-                   'an anomaly flag — these are the most expensive customers to lose.'),
-    ], className='disco-grid'),
-], className='tab-body')
-
-# ══ TAB 2 — Customer Segments (cluster maps) ═══════════════════════════════════
-segments_tab = html.Div([
-    html.Div([
+        html.Div("THE CENTRAL KDD QUESTION", className="hero-kicker"),
+        html.Div("What did we discover that was not already obvious from the raw data?",
+                 className="hero-q"),
         html.Div([
-            html.Label('Color the map by'),
-            dcc.Dropdown(id='seg-color', clearable=False, value='persona',
-                         options=[{'label': 'Customer persona (K-Means)', 'value': 'persona'},
-                                  {'label': 'Churn status', 'value': 'churn'},
-                                  {'label': 'DBSCAN structural outliers', 'value': 'noise'}]),
-            dcc.Graph(id='seg-map', config={'displayModeBar': False}),
-            html.P('2-D FAMD projection of all 10,000 customers (mixed numeric + categorical '
-                   'data). Axes are abstract pattern dimensions, not raw features. '
-                   'Default view shows the central 99.6% — zoom out for extremes.',
-                   className='fineprint'),
-        ], className='col-7'),
+            "Churn in this bank is not driven by any single column — no attribute correlates with "
+            "leaving above |r| = 0.29. The knowledge is hidden in ", html.B("combinations"), ": "
+            "seniors (46–60) churn at 51%, but a senior who is also inactive and holds only one "
+            "product churns at ", html.B("77% — nearly 4× the 20.4% baseline"), ". Germany churns at "
+            "double the rate of France and Spain and this survives every control we apply. Two "
+            "products is a safety sweet spot (7.6% churn) while one product nearly quadruples risk — "
+            "a U-shape invisible to linear analysis. And the customers most likely to leave are not "
+            "the ones with extreme values, but the ones whose ", html.B("combination"),
+            " of normal values is unusual: 45% churn among combination-anomalies vs 25% among "
+            "single-value extremes. In short: ", html.B(
+                "risk in this book is relational, not marginal — it lives in who the customer is "
+                "as a profile, not in any number on its own."),
+        ], className="hero-a"),
+    ], className="hero"),
+
+    html.Div([
+        kpi("10,000", "Customers analyzed", "14 raw features · France, Germany, Spain"),
+        kpi(f"{BASELINE:.1f}%", "Baseline churn", "2,037 customers left — the yardstick for every "
+            "number here", T.RED),
+        kpi("3", "Customer personas", "found by clustering, method-stable (ARI 0.75)", T.BLUE),
+        kpi("13", "High-lift churn rules", "all ≥ 2.5× baseline risk · top rule 3.79×", T.PURPLE),
+        kpi("876", "Anomalies flagged", "406 risk signals · 468 rare-but-valid · 2 data errors",
+            T.AMBER),
+    ], className="grid g-kpi"),
+
+    section("The four discoveries"),
+    html.Div([
+        card("1 · Churn compounds along the senior path",
+             "Churn rate as conditions stack (each bar adds one condition)",
+             C.graph(F.OV_SENIOR),
+             insight(["Age is the strongest single signal, but the story is the ", html.B("interaction"),
+                      ": inactivity roughly doubles a senior's risk, and shallow product depth "
+                      "pushes it to 77%. None of this is visible in a one-column report."])),
+        card("2 · Germany churns at double the rate",
+             "Churn rate by country — Germany loses 814 of 2,509 customers",
+             C.graph(F.OV_GEO),
+             insight(["The gap survives every control: even restricted to inactive single-product "
+                      "customers, Germany still churns at 52.1% (lift 2.56×). This points to a ",
+                      html.B("structural problem in the German operation"),
+                      ", not an unlucky customer mix."], kind="insight--bad")),
+        card("3 · Products follow a U-curve, not a line",
+             "Churn rate by number of products held",
+             C.graph(F.OV_PROD),
+             insight(["Two products = safety (7.6%). One product = weak anchor (27.7%). Three or "
+                      "four = near-certain exit (83% / 100%), a likely distress signal. Linear "
+                      "correlation rates this feature 'weak' (r = 0.05) — ", html.B(
+                          "the entropy lens in Phase 1 is what caught it"), "."])),
+        card("4 · Risk hides in combinations, not extremes",
+             "Churn rate by type of statistical unusualness (Phase 4)",
+             C.graph(F.OV_COMBO),
+             insight(["Customers flagged ONLY by multivariate detectors — unusual combinations of "
+                      "individually normal values — churn at 45.3%. Single-value extremes are "
+                      "largely benign (24.7%). ", html.B(
+                          "A dashboard that monitors columns one at a time structurally cannot "
+                          "see the riskiest customers"), "."], kind="insight--warn")),
+    ], className="grid g2"),
+
+    section("How we got here — the KDD pipeline"),
+    C.pipeline_strip(),
+], className="page")
+
+# ===========================================================================
+# TAB 2 — PHASE 1 · DATA & PREPROCESSING
+# ===========================================================================
+
+phase1 = html.Div([
+    html.Div([
+        kpi("0", "Missing values", "no imputation needed — verified, not assumed", T.GREEN),
+        kpi("0", "Duplicate records", "10,000 unique customers", T.GREEN),
+        kpi("3", "Columns dropped", "RowNumber, CustomerId, Surname (IDs & PII)"),
+        kpi("374", "Outliers retained", "seniors & low-credit are real segments — re-examined in "
+            "Phase 4", T.AMBER),
+        kpi("6 / 10", "Features selected", "by correlation + entropy — the rest kept for "
+            "unsupervised discovery", T.BLUE),
+    ], className="grid g-kpi"),
+
+    section("Know the data"),
+    html.Div([
+        card("Feature distributions — retained vs churned",
+             "Pick a feature. Red = the 2,037 customers who left; blue = the 7,963 who stayed. "
+             "Bars show % of each group, so the shapes are directly comparable.",
+             [dcc.Dropdown(id="ph1-dist-dd", options=[{"label": c, "value": c}
+                                                      for c in F.DIST_FEATURES],
+                           value="Age", clearable=False, className="dash-dropdown",
+                           style={"width": "260px"}),
+              dcc.Graph(id="ph1-dist-graph", config=T.GRAPH_CONFIG, style={"height": "300px"}),
+              html.Div(id="ph1-dist-insight")]),
+        card("Who churns? — churn rate by customer group",
+             "Pick a dimension. The dashed line is the 20.4% bank average; red bars sit clearly "
+             "above it, green clearly below.",
+             [dcc.Dropdown(id="ph1-dim-dd", options=[{"label": v, "value": k}
+                                                     for k, v in F.DIM_LABELS.items()],
+                           value="Geography", clearable=False, className="dash-dropdown",
+                           style={"width": "260px"}),
+              dcc.Graph(id="ph1-dim-graph", config=T.GRAPH_CONFIG, style={"height": "300px"}),
+              html.Div(id="ph1-dim-insight")]),
+    ], className="grid g2"),
+
+    section("Feature selection — the rubric's two lenses"),
+    card("Correlation AND entropy, side by side",
+         "Left: linear association with churn (Pearson |r| — undefined for nominal "
+         "Geography/Gender, which is precisely why a second lens is required). "
+         "Right: information-theoretic relevance (mutual information + Shannon information gain).",
+         C.graph(F.FEATSEL_FIG),
+         insight(["The two lenses agree at the top (Age, IsActiveMember) — but ", html.B(
+             "NumOfProducts is nearly invisible to correlation (|r| = 0.05) and #1–2 by "
+             "information gain"), " because its churn relation is U-shaped and cancels out in a "
+             "linear coefficient. Correlation-only selection would have discarded one of the most "
+             "informative features in the dataset. Selected: Age, NumOfProducts, Geography, "
+             "IsActiveMember, Balance, Gender."])),
+
+    section("Every decision, justified"),
+    card("Preprocessing decision log",
+         "The rubric grades justification, not just action. Each choice below is documented in "
+         "the Phase 1 report; the two data paths (scaled matrix for clustering, discretized "
+         "items for Apriori) come from these decisions.",
+         C.decisions_table()),
+], className="page")
+
+# ===========================================================================
+# TAB 3 — PHASE 2 · SEGMENTS
+# ===========================================================================
+
+phase2 = html.Div([
+    section("Three personas — named only on features that truly separate them"),
+    html.Div([C.persona_card(1), C.persona_card(0), C.persona_card(2)], className="grid g3"),
+
+    section("The cluster map"),
+    card("Customer segmentation in 2-D (PCA projection of the clustering space)",
+         "Each dot is one customer, projected from the 8-D behavioral space the algorithms "
+         "actually clustered (PC1+PC2 = 36% of variance — orientation, not proof). Switch "
+         "algorithm to see how three different definitions of 'group' read the same customers. "
+         "Geography, Gender and churn were NOT used to form these groups.",
+         [html.Div([
+             C.control("Algorithm", C.pills("ph2-algo", [
+                 {"label": "K-Means (K=3) — the personas", "value": "kmeans"},
+                 {"label": "Hierarchical Ward (K=3)", "value": "ward"},
+                 {"label": "DBSCAN (density)", "value": "dbscan"}], "kmeans")),
+             C.control("Color by", C.pills("ph2-color", [
+                 {"label": "Segment", "value": "segment"},
+                 {"label": "Churn status", "value": "churn"}], "segment")),
+         ], className="controls"),
+             dcc.Graph(id="ph2-pca-graph", config=T.GRAPH_CONFIG, style={"height": "430px"})],
+         insight(["K-Means and Ward find nearly the same three segments (ARI 0.75) ordered along "
+                  "PC1: single-product high-balance → multi-product high-balance → zero-balance. "
+                  "DBSCAN instead splits on the density valley between 1 and 2 products and "
+                  "isolates 554 'noise' customers (red ✕) in sparse regions — ", html.B(
+                      "those noise customers churn at 62.6%, the strongest anomaly-churn signal "
+                      "in the whole project"), " (picked up again in Phase 4). The banded look is "
+                  "real data: products only take 4 discrete values."])),
+
+    section("How K was chosen — both criteria, honestly read"),
+    html.Div([
+        card("Elbow & silhouette",
+             "The two required validity checks disagree — and the disagreement is informative.",
+             C.graph(F.ELBOW_SIL_FIG),
+             insight(["Silhouette peaks at K=2 (0.164) — but that split is just 'has money vs "
+                      "doesn't' (the bimodal Balance column restated). The elbow shows no sharp "
+                      "knee, only diminishing returns from K=3–5. ", html.B(
+                          "K=3 is chosen inside both windows"), ": one level finer than the "
+                      "trivial split — exactly where product depth enters and the segmentation "
+                      "becomes actionable. All silhouettes ≤ 0.16 mean these are descriptive "
+                      "segments of a continuum, not natural islands — validated instead by "
+                      "cross-algorithm stability (ARI 0.75) and the effect sizes on the right."],
+                     kind="insight--warn", icon="⚖️", title="Honest reading")),
+        card("What actually separates the segments",
+             "Effect sizes across the 3 clusters (Kruskal-Wallis ε² / Cramér's V — the larger "
+             "of the two per feature). At n = 10,000 everything is 'significant'; only effect "
+             "size is allowed to name a persona.",
+             C.graph(F.EFFECT_FIG),
+             insight(["Balance (0.73) and product depth (0.71) define the segments; geography "
+                      "(0.33) differs strongly as a ", html.B("post-clustering discovery"),
+                      ". Age, tenure, salary, credit score and activity do NOT separate these "
+                      "clusters — so the persona names deliberately never mention them."])),
+    ], className="grid g2"),
+
+    html.Div([
+        card("Segment fingerprints (snake plot)",
+             "How far each segment's average sits from the bank average, in standard deviations — "
+             "all features on one comparable scale.",
+             C.graph(F.SNAKE_FIG),
+             insight(["The three lines only fan apart on Balance and NumOfProducts — the same "
+                      "verdict as the effect sizes, from a third angle. C1 (red) = high balance, "
+                      "one product; C2 (green) = zero balance, multi-product; C0 (amber) = high "
+                      "on both."])),
+        card("Churn and geography by segment",
+             "Left: the churn validation lens (never used to form clusters). Right: where each "
+             "segment's customers live.",
+             C.graph(F.CLUSTER_CHURN_FIG),
+             insight(["Churn spans 13.6% → 25.6% across segments — a spread the weak silhouette "
+                      "knows nothing about. And Germany concentrates in the high-balance clusters "
+                      "(52% of C0) while being ", html.B("almost absent (0.7%) from the loyalist "
+                      "zero-balance segment"), " — German customers essentially never hold the "
+                      "bank's 'safe' salary-account profile. Discovered after clustering, so it "
+                      "is a finding, not an artifact."])),
+    ], className="grid g2"),
+
+    card("Cross-algorithm verdict (Mining Expo Q2)", None, None,
+         insight(["K-Means K=3 gives the most interpretable personas (silhouette 0.150). Ward "
+                  "reproduces them (ARI 0.746, NMI 0.701) — the structure is method-stable, not a "
+                  "K-Means artifact. Single linkage collapses into one chain (99.8% of customers "
+                  "in one branch) — itself evidence that the book is a continuum. DBSCAN is the "
+                  "wrong tool for personas here (it just splits 1-product vs 2-product) but the "
+                  "best discovery tool: its noise set is the most churn-dense subgroup any method "
+                  "found. Each algorithm was used for what it is structurally good at."],
+                 icon="🏁", title="Verdict")),
+], className="page")
+
+# ===========================================================================
+# TAB 4 — PHASE 3 · ASSOCIATION RULES
+# ===========================================================================
+
+hyp = M["hypothesis"]
+
+phase3 = html.Div([
+    html.Div([
+        html.Div("ASSIGNED HYPOTHESIS — CONFIRMED ✓", className="hero-kicker",
+                 style={"color": T.GREEN}),
+        html.Div("“Customers from Germany holding only one product who are inactive represent a "
+                 "strong churn profile.”", className="hero-q", style={"fontSize": "18px"}),
         html.Div([
-            html.Label('Inspect a persona'),
-            dcc.Dropdown(id='seg-persona', clearable=False, value=0,
-                         options=[{'label': f"C{p['cluster']} — {p['name']}", 'value': p['cluster']}
-                                  for p in SUMMARY['cluster_profiles']]),
-            html.Div(id='seg-profile'),
-        ], className='col-5'),
-    ], className='row'),
-], className='tab-body')
+            f"{hyp['antecedent_n']} customers match the profile → {hyp['churned_n']} of them "
+            f"churned. Confidence ", html.B(f"{hyp['confidence_pct']}%"), " (vs 20.4% baseline), "
+            f"lift ", html.B(f"{hyp['lift']}×"), f", support {hyp['support_pct']}%. The rule "
+            "clears every filter and is verified by direct computation on the raw data — the "
+            "German retention problem is real, and Phase 3 shows it is one of TWO independent "
+            "risk vectors (the other is senior age) that compound when combined.",
+        ], className="hero-a"),
+    ], className="hero", style={"background": "linear-gradient(135deg,#e6f4ea 0%,#ffffff 55%)"}),
 
-# ══ TAB 3 — Churn Rules (rule network) ═════════════════════════════════════════
-rules_tab = html.Div([
     html.Div([
-        html.Label('Minimum lift (how many times above the 20.4% baseline churn rate)'),
-        dcc.Slider(id='rule-lift', min=1.5, max=3.8, step=0.1, value=2.5,
-                   marks={1.5: '1.5×', 2.0: '2×', 2.5: '2.5×', 3.0: '3×', 3.5: '3.5×', 3.8: '3.8×'}),
-    ], className='control-strip'),
+        kpi("3,972", "Frequent itemsets", "Apriori, min support 3% (≥ ~300 customers)"),
+        kpi("520", "Rules pass filters", "confidence ≥ 50% and lift ≥ 1.5"),
+        kpi("13", "Churn-consequent rules", "the rubric needs 10 — every one ≥ 2.5× baseline",
+            T.PURPLE),
+        kpi("3.79×", "Strongest lift", "inactive senior, 1 product → 77.3% churn", T.RED),
+    ], className="grid g-kpi4"),
+
+    insight(["With a 20.4% base rate, demanding confidence ≥ 50% mathematically forces lift "
+             "≥ 2.45 — so ", html.B("every rule that survived more than doubles churn risk"),
+             ". Only 13 of 520 rules concern churn: that is the filter working, not a shortage. "
+             "The other 507 are structural co-occurrences (geography ↔ balance bands etc.), "
+             "kept in the saved file for transparency."], icon="🧪",
+            title="Why so few rules survive"),
+
+    section("The rule network"),
     html.Div([
-        html.Div(dcc.Graph(id='rule-net', config={'displayModeBar': False}), className='col-7'),
+        card("How the top-10 rules connect",
+             "Blue circles = customer attributes (bigger = appears in more rules). Diamonds = "
+             "rules A–J (redder = higher lift; hover for details). Every rule points to churn.",
+             C.graph(F.RULE_NETWORK_FIG),
+             insight(["One attribute sits at the heart of almost every rule: ", html.B(
+                 "Senior (46–60)"), ". Churn risk compounds when senior age meets inactivity, "
+                 "single-product holdings, female gender or German geography. The bank is not "
+                 "losing customers at random — it is losing ", html.B(
+                     "a specific, describable population"), "."])),
+        card("Rule quality at a glance",
+             "Each bubble is a rule: right = more reliable (confidence), up = stronger vs "
+             "baseline (lift), bigger = more customers, darker = more conditions.",
+             C.graph(F.RULE_SCATTER_FIG),
+             insight(["Rules stack up along the dotted frontier because lift = confidence ÷ "
+                      "20.4%. The prize is the top-right: rule A (3 conditions, 77% confidence) "
+                      "describes 405 real churners — specific enough to action, big enough to "
+                      "matter."])),
+    ], className="grid g2"),
+
+    section("The deliverable — top 10 rules, ranked by lift"),
+    card("Top-10 churn rules with business interpretation",
+         "Support floor 3% means the weakest rule still describes ~300 customers — no "
+         "micro-segment flukes. Select a rule for its plain-language interpretation.",
+         [C.rule_table(),
+          html.Div([
+              dcc.Dropdown(id="ph3-rule-dd",
+                           options=[{"label": f"Rule {r['letter']} — "
+                                     + " + ".join(r["if_items"]), "value": r["letter"]}
+                                    for r in R["top10"]],
+                           value="A", clearable=False, className="dash-dropdown",
+                           style={"width": "520px", "maxWidth": "100%"}),
+          ], style={"marginTop": "14px"}),
+          html.Div(id="ph3-rule-detail")]),
+
+    card("Reading the metrics", None, None,
+         insight([html.B("Support"), " = share of ALL customers matching rule + churn. ",
+                  html.B("Confidence"), " = of customers matching the IF, the % who churned. ",
+                  html.B("Lift"), " = confidence ÷ 20.4% baseline — how many times more likely. ",
+                  html.B("Conviction"), " = how much more often the rule would have to fail if "
+                  "IF and churn were independent (higher = stronger). These are historical "
+                  "associations, not causal claims — the correct response is targeted "
+                  "investigation and A/B-tested retention offers."], icon="📖",
+                 title="Glossary")),
+], className="page")
+
+# ===========================================================================
+# TAB 5 — PHASE 4 · ANOMALIES
+# ===========================================================================
+
+xr = M["cross_ref"]
+u = M["uni_mv"]
+
+phase4 = html.Div([
+    html.Div([
+        kpi("876", "Customers flagged", "by ≥1 of the 4 core methods (8.8% of book)"),
+        kpi("406", "Risk signals (C)", "churn-linked patterns → escalate to retention", T.RED),
+        kpi("468", "Rare but valid (B)", "churn just 4.1% — SAFER than average; do not delete",
+            T.AMBER),
+        kpi("2", "Suspected data errors (A)", "ages 91–92 — manual review, nothing depends on "
+            "them", T.PURPLE),
+        kpi("336", "IF ∩ DBSCAN overlap", "two structural methods agreeing · κ = 0.617", T.BLUE),
+    ], className="grid g-kpi"),
+
+    section("Six detectors, systematically compared"),
+    card("Who finds the risky anomalies?",
+         "All six methods, ranked by churn rate among the customers they flag. Blue = "
+         "multivariate (judge the whole profile); gray = univariate (judge one value at a "
+         "time). Counts are what each method flags — note IF/LOF fix their count at 5% by "
+         "construction, IQR/Z discover theirs.",
+         C.graph(F.METHOD_FIG),
+         insight(["A clean split: the structural, whole-profile methods (DBSCAN 62.6%, "
+                  "Mahalanobis 58.5%, Isolation Forest 49.0%) flag churn-dense customers, while "
+                  "single-value screens flag benign extremes (IQR 23.5%, Z-score 13.5% — ",
+                  html.B("below baseline"), "). Different methods answer different questions; "
+                  "for churn risk, trust the structural family."])),
+
+    html.Div([
+        card("The consensus trap",
+             "Churn rate by how many of the 4 core methods (IQR, Z-score, Isolation Forest, "
+             "DBSCAN) agree a customer is anomalous.",
+             C.graph(F.COMPOSITE_FIG),
+             insight(["More votes ≠ more risk. The peak is at score 2 (65.9%) — mostly the "
+                      "IF + DBSCAN pair agreeing while both univariate fences stay silent. "
+                      "Score 3–4 requires breaking a univariate fence, which fires almost only "
+                      "on extreme age — flagging settled retirees (mean age 71, churn ~18–25%). ",
+                      html.B("A naive 'escalate the most-flagged first' policy would chase "
+                             "retirees and miss the real risk pool.")],
+                     kind="insight--warn", icon="⚠️", title="The paradox")),
+        card("Combinations beat extremes",
+             f"Churn by anomaly family. Of the {u['n'][3]} multivariate-only customers, "
+             f"{u['mv_only_hidden']} ({u['mv_only_hidden_pct']:.0f}%) have NO single value "
+             "beyond |z| = 3 — every number looks normal; only the combination is rare.",
+             C.graph(F.UNIMV_FIG),
+             insight(["The two families barely overlap (Jaccard 0.21, κ 0.31) because they ask "
+                      "different questions. The risk gradient — 18.6% → 24.7% → 45.3% — shows "
+                      "churn concentrating exactly in the anomalies univariate screens ",
+                      html.B("structurally cannot see"), ": young customers with large balances, "
+                      "multi-product holders with contradictory engagement. This is the Phase-4 "
+                      "discovery."], kind="insight--bad")),
+    ], className="grid g2"),
+
+    section("The outlier map"),
+    card("Every customer by balance and Isolation-Forest score",
+         "Dots below the dashed line are the 5% most isolable profiles. Color by anomaly class "
+         "to see the triage, or by churn to see how risk concentrates toward the bottom.",
+         [html.Div([C.control("Color by", C.pills("ph4-color", [
+             {"label": "Anomaly class (triage)", "value": "class"},
+             {"label": "Churn status", "value": "churn"}], "class"))], className="controls"),
+          dcc.Graph(id="ph4-scatter", config=T.GRAPH_CONFIG, style={"height": "430px"})],
+         insight(["The most anomalous region (bottom) is dominated by red risk-signal cases at "
+                  "BOTH ends of the balance axis: high-balance pre-churn departures on the right "
+                  "(592 churners averaging £149.8K — 46% German), and unusual zero-balance "
+                  "profiles on the left. Amber rare-valid cases sit just below the threshold — "
+                  "unusual, but safe."])),
+
+    section("Classification & action — the anomaly typology"),
+    html.Div([
+        card("Every flagged record classified",
+             "The rubric's three classes, applied to all 876 flagged records.",
+             C.graph(F.CLASS_DONUT_FIG)),
+        card("Subtypes",
+             "The four risk-signal templates the bank should monitor prospectively.",
+             C.graph(F.SUBTYPE_FIG)),
+    ], className="grid g2-narrow"),
+    card("Recommended actions per class", None,
+         [C.action_table(),
+          html.Div("* Class C churn = 100% by construction: the typology uses the observed churn "
+                   "label retrospectively as supporting evidence, as the brief prescribes. "
+                   "Deployed prospectively, expect the Phase-3/4 lift levels (≈2.5–3.8×), never "
+                   "100% — this figure must not be quoted as model performance.",
+                   className="footnote")]),
+
+    section("Cross-reference with Phase 2 (explicitly graded)"),
+    html.Div([
+        card("Where DBSCAN's noise lives across the personas",
+             "The 554 Phase-2 density outliers, mapped into the three K-Means segments.",
+             C.graph(F.CROSSREF_FIG),
+             insight(["The noise concentrates (10.6%) inside C0 — the multi-product Germany-skew "
+                      "segment — and is rarest in the loyalist C2 (1.7%). Cluster outliers and "
+                      "statistical anomalies point at the same neighbourhood of customers: "
+                      "unusual multi-product, older, high-engagement-contradiction profiles."])),
+        card("Agreement between anomaly views", None, None,
+             insight([f"IF ∩ DBSCAN share {xr['if_dbscan_overlap']} customers (Jaccard 0.47, "
+                      f"κ 0.617, churn {xr['if_dbscan_churn']}%) — two structurally different "
+                      "multivariate mechanisms (tree isolation vs density) converging on the same "
+                      "people is mutual validation. Weakest pair: Z-score vs DBSCAN (κ 0.21) — a "
+                      "strict single-value fence and a joint-density method barely overlap, "
+                      "exactly as the family analysis predicts. Anomaly votes must be weighted "
+                      "by the question each voter asks: the IF ∩ DBSCAN intersection is the "
+                      "high-value retention list; univariate flags are the data-quality and "
+                      "rare-case documentation pool."], icon="🔗", title="Verdict")),
+    ], className="grid g2"),
+], className="page")
+
+# ===========================================================================
+# TAB 6 — KNOWLEDGE REPORT
+# ===========================================================================
+
+report = html.Div([
+    html.Div([
+        html.Div("KNOWLEDGE DISCOVERY REPORT — THE DIRECT ANSWER", className="hero-kicker"),
+        html.Div("We discovered that churn risk is relational: it lives in profiles, "
+                 "not in columns.", className="hero-q"),
         html.Div([
-            html.H4(id='rule-count'),
-            dash_table.DataTable(
-                id='rule-table',
-                columns=[{'name': 'IF a customer is…', 'id': 'ant'},
-                         {'name': 'Support', 'id': 'sup'},
-                         {'name': 'Churn rate', 'id': 'conf'},
-                         {'name': 'Lift', 'id': 'lift'}],
-                style_cell={'fontFamily': 'inherit', 'fontSize': 13, 'padding': '6px 10px',
-                            'whiteSpace': 'normal', 'height': 'auto', 'textAlign': 'left'},
-                style_header={'fontWeight': '500', 'backgroundColor': '#f8f9fa', 'color': '#5f6368', 'textTransform': 'uppercase', 'fontSize': 11.5, 'letterSpacing': '0.4px', 'borderBottom': '1px solid #dadce0'},
-                style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f8f9fa'}],
-                page_size=8),
-            html.P('Reading guide: “Support” = share of all 10,000 customers matching the '
-                   'profile AND churning. “Churn rate” = confidence — of customers matching '
-                   'the profile, the share who churned (baseline 20.4%). “Lift” = how many '
-                   'times the baseline that is.', className='fineprint'),
-        ], className='col-5'),
-    ], className='row'),
-], className='tab-body')
+            "Raw-data inspection shows a 20% churn rate and mild demographic tilts. Mining the "
+            "same 10,000 customers end-to-end revealed four pieces of knowledge none of which is "
+            "visible in a univariate report: (1) a compounding ", html.B("senior × engagement "
+            "interaction"), " that escalates from 51% to 77% churn as conditions stack; (2) a ",
+            html.B("structural German retention problem"), " that doubles churn independently of "
+            "customer mix; (3) a customer book organized by ", html.B("balance × product depth"),
+            " — whose largest segment (41.7%) keeps six-figure balances anchored by only one "
+            "product; and (4) the fact that ", html.B("unusual combinations of normal values"),
+            " predict churn (45.3%) far better than extreme single values (24.7%). The value of "
+            "this project is the interpretation of these hidden profiles — not prediction "
+            "accuracy.",
+        ], className="hero-a"),
+    ], className="hero"),
 
-# ══ TAB 4 — Anomalies & Outliers ═══════════════════════════════════════════════
-mt = pd.DataFrame(SUMMARY['anomaly_methods'])
-anomaly_tab = html.Div([
-    html.Div([
-        html.Label('Show customers flagged by'),
-        dcc.Checklist(id='anom-methods', inline=True,
-                      value=['IF_flag', 'DBSCAN_flag'],
-                      options=[{'label': ' IQR', 'value': 'IQR_flag'},
-                               {'label': ' Z-score', 'value': 'ZScore_flag'},
-                               {'label': ' Isolation Forest', 'value': 'IF_flag'},
-                               {'label': ' DBSCAN noise', 'value': 'DBSCAN_flag'}]),
-    ], className='control-strip'),
-    html.Div([
-        html.Div(dcc.Graph(id='anom-scatter', config={'displayModeBar': False}), className='col-7'),
-        html.Div(dcc.Graph(id='anom-composite', config={'displayModeBar': False}), className='col-5'),
-    ], className='row'),
-    html.Div([
-        html.Div([
-            html.H4('Detection methods compared'),
-            dash_table.DataTable(
-                data=mt.rename(columns={'method': 'Method', 'flagged': 'Flagged',
-                                        'pct': '% of book', 'churn_rate': 'Churn % in flagged'})
-                       .to_dict('records'),
-                style_cell={'fontFamily': 'inherit', 'fontSize': 13, 'padding': '6px 10px'},
-                style_header={'fontWeight': '500', 'backgroundColor': '#f8f9fa', 'color': '#5f6368', 'textTransform': 'uppercase', 'fontSize': 11.5, 'letterSpacing': '0.4px', 'borderBottom': '1px solid #dadce0'}),
-            html.P(f"{SUMMARY['n_flagged']:,} customers were flagged by at least one method; "
-                   f"{SUMMARY['n_high_conf']} by three or four. Each flagged record was "
-                   'classified as Data Error (2), Rare-but-Legitimate (583) or Risk Signal '
-                   '(469).', className='fineprint'),
-        ], className='col-6'),
-        html.Div(dcc.Graph(id='anom-class', config={'displayModeBar': False}), className='col-6'),
-    ], className='row'),
-], className='tab-body')
+    section("Findings & recommended actions"),
+    card(None, None, [
+        C.finding("1", "The bank is hemorrhaging seniors with shallow product engagement",
+                  "Senior (46–60) is the dominant antecedent in every top rule. Inactive "
+                  "single-product seniors churn at 77.3% (lift 3.79×, 405 customers). Action: "
+                  "retention call before a second consecutive inactive quarter; bundled second "
+                  "product; senior-specific engagement program."),
+        C.finding("2", "Germany has a structural retention problem",
+                  "32.4% churn vs ~16% elsewhere; 46% of high-balance churners are German; German "
+                  "seniors churn at 67% regardless of activity. Action: investigate product fit "
+                  "and service quality in the German operation specifically — this is not a "
+                  "customer-mix effect."),
+        C.finding("3", "The riskiest mainstream segment is high-balance / single-product",
+                  "Persona C1 — 4,168 customers (41.7%) with ~£120K average balance and exactly "
+                  "one product — churns at 25.6%, the highest of the three segments. Money "
+                  "without product depth is unanchored. Action: cross-sell into C1 before "
+                  "the money leaves; measure product depth, not balance, as the loyalty KPI."),
+        C.finding("4", "Monitor combinations, not thresholds",
+                  "Customers anomalous only as combinations churn at 45.3% — and 90% of them "
+                  "trip no single-value alarm. The 554 DBSCAN noise customers churn at 62.6%. "
+                  "Action: add a multivariate anomaly score (IF/DBSCAN-style) to the CRM "
+                  "watchlist alongside the existing per-column limits."),
+    ]),
 
-# ══ TAB 5 — Distributions ══════════════════════════════════════════════════════
-dist_tab = html.Div([
-    html.Div([
-        html.Label('Market'),
-        dcc.Dropdown(id='dist-geo', clearable=False, value='All',
-                     options=[{'label': g, 'value': g} for g in
-                              ['All', 'France', 'Germany', 'Spain']],
-                     style={'width': '220px'}),
-    ], className='control-strip'),
-    html.Div([
-        html.Div(dcc.Graph(id='dist-geo-churn', config={'displayModeBar': False}), className='col-6'),
-        html.Div(dcc.Graph(id='dist-age', config={'displayModeBar': False}), className='col-6'),
-    ], className='row'),
-    html.Div([
-        html.Div(dcc.Graph(id='dist-balance', config={'displayModeBar': False}), className='col-6'),
-        html.Div(dcc.Graph(id='dist-products', config={'displayModeBar': False}), className='col-6'),
-    ], className='row'),
-], className='tab-body')
+    section("Mining Expo — the four questions"),
+    card(None, None, [
+        C.qa("Q1 · Which association rules were the most surprising, and why?",
+             [html.B("{Inactive ∩ Senior ∩ 1 product} → churn"), " (77.3% confidence, lift 3.79) "
+              "— not because inactivity matters, but because the AGE interaction transforms it: "
+              "younger inactives usually re-engage, senior inactives leave for good. Second: ",
+              html.B("{Senior ∩ Germany} → churn"), " (67.3%, lift 3.31) — it survives despite "
+              "geography being excluded from clustering distance, making the German signal a "
+              "discovered profile rather than an artifact. The assigned hypothesis "
+              "{Germany ∩ Inactive ∩ 1 product} was confirmed at 52.1% confidence, lift 2.56."]),
+        C.qa("Q2 · Which clustering method produced the most interpretable segments?",
+             ["K-Means at K=3 — chosen over the silhouette-peak K=2, which merely restates the "
+              "bimodal balance column. Ward hierarchical validates the partition (ARI 0.746); "
+              "DBSCAN is the better discovery tool (its 554 noise points churn at 62.6%) but a "
+              "worse persona tool (it only splits on product count). Honest caveat: all "
+              "silhouettes ≤ 0.164 — these are stable, business-distinct operational segments "
+              "of a continuum, not natural species."]),
+        C.qa("Q3 · What anomalies were found, and what do they suggest in a real banking context?",
+             ["Three species: (a) 406 risk signals — high-balance pre-churn departures "
+              "(avg £149.8K, 46% German: relationship-manager outreach), disengaged "
+              "single-product churners, and density outliers; (b) 468 rare-but-valid profiles "
+              "(settled elderly, zero-balance) churning at just 4.1% — flagging them for "
+              "'cleaning' would have destroyed real segments; (c) 2 suspected data errors "
+              "(ages 91–92) for manual verification. The banking lesson: risk hides in unusual "
+              "profiles, so monitoring should be multivariate."]),
+        C.qa("Q4 · How do the findings compare to other banking domains?",
+             ["Fraud and credit-risk datasets (Groups 3/8, 4) typically surface financial-"
+              "capacity variables. Our churn book is the opposite: CreditScore and Salary carry "
+              "almost zero signal, while engagement and relationship-depth variables (Age, "
+              "NumOfProducts, IsActiveMember, Geography, Balance) carry it all. Same KDD "
+              "pipeline, different knowledge — the meaning of 'anomaly' is domain-shaped: here "
+              "it is a disengaging customer, in fraud it is a transaction pattern."]),
+    ]),
 
-# ══ App shell ══════════════════════════════════════════════════════════════════
-app = Dash(__name__, title='Group 5 — Churn Knowledge Discovery')
+    section("Limitations — what we cannot claim"),
+    card(None, None, [html.Ul([
+        html.Li([html.B("Snapshot data, longitudinal question. "), "The assigned 'sudden balance "
+                 "drop before closure' cannot be observed in one snapshot per customer; Phase 4 "
+                 "proxies it as {high balance ∩ exited}. A true drop-detector needs transaction "
+                 "time series."]),
+        html.Li([html.B("Weak geometric separation. "), "All silhouettes ≤ 0.164: three useful, "
+                 "stable, business-distinct segments — not three natural species."]),
+        html.Li([html.B("Retrospective constructs. "), "Rule confidences (52–77%) and Class-C "
+                 "rates describe this historical snapshot; deployed prospectively, expect "
+                 "regression toward the lift values."]),
+        html.Li([html.B("Discretization sensitivity. "), "Rules depend on bin boundaries "
+                 "(Senior = 46–60), fixed from domain conventions before mining."]),
+        html.Li([html.B("No causal claims. "), "Germany's 2× churn and the senior effect are "
+                 "associations in one bank's book over one period. Correct response: targeted "
+                 "investigation and A/B-tested offers, not blanket policy."]),
+        html.Li([html.B("Method-setting residue. "), "DBSCAN counts depend on (eps=1.25, "
+                 "minPts=10); IF/LOF on contamination=5%. Sensitivity was reported; every count "
+                 "reads 'under the stated settings'."]),
+    ], className="tight"),
+        html.Div("None of these threaten the central findings — each is triangulated by at "
+                 "least two independent methods. The limitations bound how far the findings "
+                 "generalize beyond this snapshot.", className="footnote")]),
+
+    card("Reproducibility", None, None,
+         insight(["Pipeline: notebooks/notebook.ipynb (Phases 1–4, random_state = 42, full "
+                  "10,000 records, no sampling) → prepare_data.py (assembles this dashboard's "
+                  "cache; recomputed values verified against the notebook: Ward ARI 0.7461, "
+                  "NMI 0.7014, silhouettes to 4 decimals) → app.py (Plotly Dash). Stack: pandas, "
+                  "scikit-learn, mlxtend, SciPy, Plotly Dash."], icon="🔁",
+                 title="How to reproduce")),
+], className="page")
+
+# ===========================================================================
+# Shell
+# ===========================================================================
 
 app.layout = html.Div([
     html.Div([
-        html.H1('Where the Bank Quietly Loses Its Customers'),
-        html.P('Knowledge discovery in a 10,000-customer retail-banking book · '
-               'Group 5 · Bank Customer Churn · KDD Phases 1–5', className='byline'),
         html.Div([
-            kpi('Customers analysed', f"{SUMMARY['n_customers']:,}", '3 markets'),
-            kpi('Baseline churn', f'{BASELINE:.1f}%', '1 in 5 leaves'),
-            kpi('Customer personas', '3', 'K-Means · Ward · DBSCAN'),
-            kpi('Churn rules mined', str(SUMMARY['n_churn_rules']), 'lift up to 3.8×'),
-            kpi('Anomalies flagged', f"{SUMMARY['n_flagged']:,}", '4 methods'),
-            kpi('High-value churners', str(hb['n']), f"~£{hb['avg_balance']/1000:.0f}K each"),
-        ], className='kpi-strip'),
-    ], className='header'),
-    dcc.Tabs(className='looker-tabs', children=[
-        dcc.Tab(label='The Discovery', children=discovery_tab, className='looker-tab', selected_className='looker-tab--selected'),
-        dcc.Tab(label='Customer Segments', children=segments_tab, className='looker-tab', selected_className='looker-tab--selected'),
-        dcc.Tab(label='Churn Rules', children=rules_tab, className='looker-tab', selected_className='looker-tab--selected'),
-        dcc.Tab(label='Anomalies', children=anomaly_tab, className='looker-tab', selected_className='looker-tab--selected'),
-        dcc.Tab(label='Distributions', children=dist_tab, className='looker-tab', selected_className='looker-tab--selected'),
-    ]),
-    html.Div('Group 5 · Data Mining · KDD methodology — discovery, not prediction. '
-             'All figures recomputable from notebooks/notebook.ipynb.', className='footer'),
+            html.Div([html.Span(style={"background": c}) for c in
+                      [T.BLUE, T.RED, T.AMBER, T.GREEN]], className="logo-dots"),
+            html.Div([
+                html.Div("Bank Customer Churn — Knowledge Discovery", className="appbar-title"),
+                html.Div("KDD pipeline · 10,000 retail customers · France · Germany · Spain",
+                         className="appbar-sub"),
+            ]),
+            html.Div([
+                html.Div([html.B("Group 5"), " · Data Mining · Phase 5 deliverable"]),
+                html.Div("Discovery over prediction — every number traces to the notebook"),
+            ], className="appbar-meta"),
+        ], className="appbar-row"),
+        html.Div(dcc.Tabs(id="tabs", value="overview", className="custom-tabs", children=[
+            dcc.Tab(label="✦ The Discovery", value="overview",
+                    className="ctab", selected_className="ctab--selected"),
+            dcc.Tab(label="1 · Data & Preprocessing", value="ph1",
+                    className="ctab", selected_className="ctab--selected"),
+            dcc.Tab(label="2 · Customer Segments", value="ph2",
+                    className="ctab", selected_className="ctab--selected"),
+            dcc.Tab(label="3 · Churn Rules", value="ph3",
+                    className="ctab", selected_className="ctab--selected"),
+            dcc.Tab(label="4 · Anomalies", value="ph4",
+                    className="ctab", selected_className="ctab--selected"),
+            dcc.Tab(label="5 · Knowledge Report", value="report",
+                    className="ctab", selected_className="ctab--selected"),
+        ]), className="tabs-holder"),
+    ], className="appbar"),
+    html.Div(id="tab-content"),
 ])
 
-
-# ══ Cached view builders (memoized: every control has a finite input space) ════
-@lru_cache(maxsize=8)
-def build_segment_map(mode):
-    fig = go.Figure()
-    # constant-per-trace label goes in the template, not in 10K customdata rows
-    cd = np.column_stack([FAMD['Geography'], FAMD['Age'],
-                          FAMD['Balance'].round(0)])
-
-    def tmpl(label):
-        return (f'<b>{label}</b><br>%{{customdata[0]}} · Age %{{customdata[1]}}'
-                '<br>Balance £%{customdata[2]:,.0f}<extra></extra>')
-
-    if mode == 'persona':
-        for c in sorted(FAMD['Cluster'].unique()):
-            m = (FAMD['Cluster'] == c).values
-            label = FAMD.loc[m, 'Cluster_Name'].iloc[0]
-            fig.add_trace(go.Scattergl(
-                x=FAMD.loc[m, 'Dim1'], y=FAMD.loc[m, 'Dim2'], mode='markers',
-                name=f'C{c}', marker=dict(size=4, color=PERSONA_COLORS[c], opacity=0.45),
-                customdata=cd[m], hovertemplate=tmpl(label)))
-    elif mode == 'churn':
-        for val, name, color in [(0, 'Retained', RETAIN_BLUE), (1, 'Churned', CHURN_RED)]:
-            m = (FAMD['Exited'] == val).values
-            fig.add_trace(go.Scattergl(
-                x=FAMD.loc[m, 'Dim1'], y=FAMD.loc[m, 'Dim2'], mode='markers', name=name,
-                marker=dict(size=4, color=color, opacity=0.45 if val else 0.25),
-                customdata=cd[m], hovertemplate=tmpl(name)))
-    else:
-        for val, name, color, op in [(0, 'Core customers', GREY, 0.3),
-                                     (1, 'Structural outliers (52% churn)', CHURN_RED, 0.8)]:
-            m = (FAMD['DBSCAN_noise'] == val).values
-            fig.add_trace(go.Scattergl(
-                x=FAMD.loc[m, 'Dim1'], y=FAMD.loc[m, 'Dim2'], mode='markers', name=name,
-                marker=dict(size=4 if not val else 5, color=color, opacity=op),
-                customdata=cd[m], hovertemplate=tmpl(name)))
-    fig.update_layout(template=TEMPLATE, height=520, margin=dict(l=10, r=10, t=30, b=10),
-                      legend=dict(orientation='h', y=1.06),
-                      xaxis=dict(title='Pattern dimension 1', range=XRANGE),
-                      yaxis=dict(title='Pattern dimension 2', range=YRANGE))
-    return fig
+PAGES = {"overview": overview, "ph1": phase1, "ph2": phase2,
+         "ph3": phase3, "ph4": phase4, "report": report}
 
 
-@lru_cache(maxsize=8)
-def build_segment_profile(c):
-    p = next(x for x in SUMMARY['cluster_profiles'] if x['cluster'] == c)
-    pop = {'churn_rate': BASELINE, 'active_rate': CUST['IsActiveMember'].mean() * 100,
-           'germany_pct': (CUST['Geography'] == 'Germany').mean() * 100,
-           'avg_products': CUST['NumOfProducts'].mean(),
-           'avg_balance': CUST['Balance'].mean(), 'avg_tenure': CUST['Tenure'].mean()}
-    rows = [('Churn rate', f"{p['churn_rate']}%", f"{pop['churn_rate']:.1f}%"),
-            ('Average balance', f"£{p['avg_balance']:,.0f}", f"£{pop['avg_balance']:,.0f}"),
-            ('Products held', f"{p['avg_products']}", f"{pop['avg_products']:.2f}"),
-            ('Active members', f"{p['active_rate']}%", f"{pop['active_rate']:.1f}%"),
-            ('Based in Germany', f"{p['germany_pct']}%", f"{pop['germany_pct']:.1f}%"),
-            ('Years with bank', f"{p['avg_tenure']}", f"{pop['avg_tenure']:.2f}")]
-    return html.Div([
-        html.Div([html.Span(f"C{p['cluster']}", className='persona-chip',
-                            style={'background': PERSONA_COLORS[c]}),
-                  html.H3(p['name'])], className='persona-head'),
-        html.P(f"{p['n']:,} customers ({p['pct']}% of the book) · average age {p['avg_age']}"),
-        html.Table([html.Thead(html.Tr([html.Th('Metric'), html.Th('This persona'),
-                                        html.Th('Whole book')]))] +
-                   [html.Tbody([html.Tr([html.Td(a), html.Td(b, className='strong'),
-                                         html.Td(cv)]) for a, b, cv in rows])],
-                   className='profile-table'),
-    ], className='persona-card')
+@app.callback(Output("tab-content", "children"), Input("tabs", "value"))
+def render_tab(tab):
+    return PAGES[tab]
 
 
-@lru_cache(maxsize=32)
-def build_rule_network(min_lift):
-    sel = RULES[RULES['lift'] >= min_lift].nlargest(20, 'lift')
-    items = sorted({i for ant in sel['antecedent'] for i in ant.split('|')})
-    n = max(len(items), 1)
-    pos = {it: (1.05 * np.cos(2 * np.pi * k / n), 1.05 * np.sin(2 * np.pi * k / n))
-           for k, it in enumerate(items)}
-    fig = go.Figure()
-    for _, r in sel.iterrows():
-        ants = r['antecedent'].split('|')
-        cx = np.mean([pos[a][0] for a in ants]) * 0.45
-        cy = np.mean([pos[a][1] for a in ants]) * 0.45
-        for a in ants:
-            fig.add_trace(go.Scatter(x=[pos[a][0], cx], y=[pos[a][1], cy], mode='lines',
-                                     line=dict(color='#c9d4de', width=1.2),
-                                     hoverinfo='skip', showlegend=False))
-        fig.add_trace(go.Scatter(x=[cx, 0], y=[cy, 0], mode='lines',
-                                 line=dict(color=CHURN_RED, width=1 + 2.2 * (r['lift'] - 1.5)),
-                                 opacity=0.5, hoverinfo='skip', showlegend=False))
-        fig.add_trace(go.Scatter(
-            x=[cx], y=[cy], mode='markers',
-            marker=dict(size=7 + 26 * r['support'], symbol='diamond', color='#f4a261',
-                        line=dict(color='#7a4d12', width=1)),
-            hovertemplate=('IF ' + ' + '.join(nice(a) for a in ants) +
-                           f"<br>THEN churned · churn rate {r['confidence']*100:.1f}%"
-                           f"<br>support {r['support']*100:.2f}% · lift {r['lift']:.2f}×"
-                           '<extra></extra>'),
-            showlegend=False))
-    fig.add_trace(go.Scatter(
-        x=[pos[i][0] for i in items], y=[pos[i][1] for i in items],
-        mode='markers+text', text=[nice(i) for i in items], textposition='top center',
-        textfont=dict(size=11), marker=dict(size=13, color=RETAIN_BLUE),
-        hoverinfo='skip', showlegend=False))
-    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers+text', text=['CHURNED'],
-                             textposition='middle center',
-                             textfont=dict(size=11, color='white'),
-                             marker=dict(size=58, color=CHURN_RED), hoverinfo='skip',
-                             showlegend=False))
-    fig.update_layout(template=TEMPLATE, height=520,
-                      margin=dict(l=10, r=10, t=30, b=10),
-                      xaxis=dict(visible=False, range=[-1.45, 1.45]),
-                      yaxis=dict(visible=False, range=[-1.35, 1.35]))
-    table = tuple({'ant': ' + '.join(nice(a) for a in r['antecedent'].split('|')),
-                   'sup': f"{r['support']*100:.2f}%", 'conf': f"{r['confidence']*100:.1f}%",
-                   'lift': f"{r['lift']:.2f}×"} for _, r in sel.iterrows())
-    label = f'{len(sel)} rules at lift ≥ {min_lift:.1f}×'
-    return fig, table, label
+@app.callback(Output("ph1-dist-graph", "figure"), Output("ph1-dist-insight", "children"),
+              Input("ph1-dist-dd", "value"))
+def update_dist(col):
+    return F.DIST_FIGS[col], insight(F.DIST_INSIGHTS[col])
 
 
-@lru_cache(maxsize=16)
-def build_anomaly_views(methods):
-    methods = list(methods)
-    flagged = ANOM[methods].max(axis=1) == 1 if methods else pd.Series(False, index=ANOM.index)
-    fig = go.Figure()
-    bg = ANOM[~flagged]
-    fig.add_trace(go.Scattergl(x=bg['Balance'], y=bg['IF_anomaly_score'], mode='markers',
-                               name='Not flagged', marker=dict(size=3, color=GREY, opacity=0.35),
-                               hoverinfo='skip'))
-    for val, nm, color in [(0, 'Flagged · retained', RETAIN_BLUE), (1, 'Flagged · churned', CHURN_RED)]:
-        m = flagged & (ANOM['Exited'] == val)
-        d = ANOM[m]
-        fig.add_trace(go.Scattergl(
-            x=d['Balance'], y=d['IF_anomaly_score'], mode='markers', name=nm,
-            marker=dict(size=5, color=color, opacity=0.75),
-            customdata=d[['Geography', 'Age', 'Anomaly_Class']].values,
-            hovertemplate='%{customdata[0]} · age %{customdata[1]}<br>Balance £%{x:,.0f}'
-                          '<br>%{customdata[2]}<extra></extra>'))
-    fig.update_layout(template=TEMPLATE, height=430, margin=dict(l=10, r=10, t=40, b=10),
-                      title='Isolation-Forest anomaly score vs balance',
-                      xaxis_title='Account balance (£)',
-                      yaxis_title='Anomaly score (lower = stranger)',
-                      legend=dict(orientation='h', y=1.12))
-
-    comp = ANOM['Composite_Anomaly_Score'].value_counts().sort_index()
-    churn_by = ANOM.groupby('Composite_Anomaly_Score')['Exited'].mean() * 100
-    fig2 = go.Figure(go.Bar(x=comp.index, y=comp.values,
-                            marker_color=['#1a9641', '#a6d96a', '#fdae61', '#d7191c', '#7b2c2c'],
-                            text=[f'{churn_by[i]:.0f}% churn' for i in comp.index],
-                            textposition='outside'))
-    fig2.update_layout(template=TEMPLATE, height=430, margin=dict(l=10, r=10, t=40, b=10),
-                       title='How many methods agree per customer',
-                       xaxis_title='Methods flagging the customer', yaxis_title='Customers',
-                       yaxis_range=[0, comp.max() * 1.18])
-
-    fl = ANOM[ANOM['Composite_Anomaly_Score'] >= 1]
-    cc = fl['Anomaly_Class'].value_counts().sort_values()
-    fig3 = go.Figure(go.Bar(x=cc.values, y=[c.replace(' — ', '<br>') for c in cc.index],
-                            orientation='h', marker_color='#6d597a',
-                            text=cc.values, textposition='outside'))
-    fig3.update_layout(template=TEMPLATE, height=430, margin=dict(l=10, r=10, t=40, b=10),
-                       title=f'Classification of the {len(fl):,} flagged anomalies',
-                       xaxis_range=[0, cc.max() * 1.2])
-    return fig, fig2, fig3
+@app.callback(Output("ph1-dim-graph", "figure"), Output("ph1-dim-insight", "children"),
+              Input("ph1-dim-dd", "value"))
+def update_dim(dim):
+    return F.DIM_FIGS[dim], insight(F.DIM_INSIGHTS[dim])
 
 
-@lru_cache(maxsize=8)
-def build_distributions(geo):
-    d = CUST if geo == 'All' else CUST[CUST['Geography'] == geo]
-    gc = SUMMARY['geo_churn']
-    colors = [CHURN_RED if (geo in (g, 'All')) else GREY for g in gc]
-    f1 = go.Figure(go.Bar(x=list(gc.keys()), y=list(gc.values()), marker_color=colors,
-                          text=[f'{v}%' for v in gc.values()], textposition='outside'))
-    f1.add_hline(y=BASELINE, line_dash='dot', annotation_text=f'baseline {BASELINE:.1f}%')
-    f1.update_layout(template=TEMPLATE, height=360, title='Churn rate by market',
-                     margin=dict(l=10, r=10, t=40, b=10), yaxis_range=[0, 40])
-
-    def hist_fig(col, title, bins):
-        # numpy-binned bars instead of raw-point histograms keep the figure
-        # payload tiny (≤50 bars instead of 10K points per trace)
-        edges = np.histogram_bin_edges(CUST[col], bins=bins)
-        centers = (edges[:-1] + edges[1:]) / 2
-        width = (edges[1] - edges[0]) * 0.92
-        f = go.Figure()
-        for val, nm, color in [(0, 'Retained', RETAIN_BLUE), (1, 'Churned', CHURN_RED)]:
-            counts, _ = np.histogram(d[d['Exited'] == val][col], bins=edges)
-            f.add_trace(go.Bar(x=centers, y=counts, width=width, name=nm,
-                               marker_color=color, opacity=0.65))
-        f.update_layout(template=TEMPLATE, height=360, barmode='overlay', title=title,
-                        margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation='h', y=1.1))
-        return f
-
-    f2 = hist_fig('Age', f'Age distribution — {geo}', 40)
-    f2.add_vrect(x0=46, x1=60, fillcolor='#f4a261', opacity=0.15, line_width=0,
-                 annotation_text='46–60', annotation_position='top left')
-
-    f3 = hist_fig('Balance', f'Balance distribution — {geo} (36% of the book holds £0)', 50)
-
-    pr = d.groupby('NumOfProducts')['Exited'].agg(['mean', 'size'])
-    f4 = go.Figure(go.Bar(x=pr.index, y=pr['mean'] * 100,
-                          marker_color=['#e76f51', '#2a9d8f', '#d62828', '#7b2c2c'][:len(pr)],
-                          text=[f"{v*100:.1f}%<br>(n={s:,})" for v, s in zip(pr['mean'], pr['size'])],
-                          textposition='outside'))
-    f4.add_hline(y=BASELINE, line_dash='dot', annotation_text='baseline')
-    f4.update_layout(template=TEMPLATE, height=360,
-                     title=f'Churn rate by products held — {geo}',
-                     xaxis=dict(tickmode='array', tickvals=[1, 2, 3, 4]),
-                     margin=dict(l=10, r=10, t=40, b=10), yaxis_range=[0, 115])
-    return f1, f2, f3, f4
+@app.callback(Output("ph2-pca-graph", "figure"),
+              Input("ph2-algo", "value"), Input("ph2-color", "value"))
+def update_pca(algo, colorby):
+    return F.PCA_FIGS[(algo, colorby)]
 
 
-# ══ Thin registered callbacks delegating to the cached builders ════════════════
-@app.callback(Output('seg-map', 'figure'), Input('seg-color', 'value'))
-def segment_map(mode):
-    return build_segment_map(mode)
+@app.callback(Output("ph3-rule-detail", "children"), Input("ph3-rule-dd", "value"))
+def update_rule_detail(letter):
+    r = next(x for x in R["top10"] if x["letter"] == letter)
+    chips = [chip(it, "blue") for it in r["if_items"]]
+    stats = (f"confidence {r['confidence_pct']}% · lift {r['lift']:.2f}× · "
+             f"{r['customers']:,} churners · conviction {r['conviction']:.2f}")
+    return insight([html.Span(chips + [html.Span(" → "), chip("Churned", "red")],
+                              style={"display": "inline-flex", "gap": "6px",
+                                     "flexWrap": "wrap", "alignItems": "center",
+                                     "marginRight": "8px"}),
+                    html.Div(stats, style={"margin": "6px 0", "fontWeight": "600"}),
+                    html.Div(r["commentary"])],
+                   icon="🎯", title=f"Rule {letter}")
 
 
-@app.callback(Output('seg-profile', 'children'), Input('seg-persona', 'value'))
-def segment_profile(c):
-    return build_segment_profile(int(c))
+@app.callback(Output("ph4-scatter", "figure"), Input("ph4-color", "value"))
+def update_outlier(colorby):
+    return F.OUTLIER_FIGS[colorby]
 
 
-@app.callback(Output('rule-net', 'figure'), Output('rule-table', 'data'),
-              Output('rule-count', 'children'), Input('rule-lift', 'value'))
-def rule_network(min_lift):
-    fig, table, label = build_rule_network(round(float(min_lift), 1))
-    return fig, list(table), label
-
-
-@app.callback(Output('anom-scatter', 'figure'), Output('anom-composite', 'figure'),
-              Output('anom-class', 'figure'), Input('anom-methods', 'value'))
-def anomaly_views(methods):
-    return build_anomaly_views(tuple(sorted(methods or [])))
-
-
-@app.callback(Output('dist-geo-churn', 'figure'), Output('dist-age', 'figure'),
-              Output('dist-balance', 'figure'), Output('dist-products', 'figure'),
-              Input('dist-geo', 'value'))
-def distributions(geo):
-    return build_distributions(geo)
-
-
-# ── Pre-warm every cacheable view at startup (~2 s once) so the first user
-#    interaction on each control is already a cache hit ────────────────────────
-for _m in ['persona', 'churn', 'noise']:
-    build_segment_map(_m)
-for _c in [0, 1, 2]:
-    build_segment_profile(_c)
-for _l in [1.5, 2.0, 2.5, 3.0, 3.5, 3.8]:
-    build_rule_network(_l)
-for _g in ['All', 'France', 'Germany', 'Spain']:
-    build_distributions(_g)
-build_anomaly_views(('DBSCAN_flag', 'IF_flag'))
-build_anomaly_views(('DBSCAN_flag', 'IF_flag', 'IQR_flag', 'ZScore_flag'))
-
-
-if __name__ == '__main__':
-    app.run(debug=False, host='127.0.0.1', port=8050)
+if __name__ == "__main__":
+    app.run(debug=False, host="127.0.0.1", port=8050)

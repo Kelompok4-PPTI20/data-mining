@@ -1,0 +1,228 @@
+================================================================================
+MINING EXPO — FULL CONTENT PACK (Group 5: Bank Customer Churn)
+Source: criteria.md Section 6 + executed notebook results (notebook.ipynb)
+Purpose: everything needed to build the expo PPT. Suggested slide split included.
+================================================================================
+
+--------------------------------------------------------------------------------
+WHAT THE EXPO IS (from criteria.md, Section 6)
+--------------------------------------------------------------------------------
+- All groups present at the end-of-semester Mining Expo.
+- Every group applied the SAME 5-phase KDD methodology to a DIFFERENT banking
+  dataset, so the expo is structured ground for cross-group comparison.
+- Format context: the graded presentation is 10 minutes, and the rubric rewards
+  structure, clarity, and the team demonstrating full understanding under
+  questioning (Section 5.5).
+- The expo's message: mining techniques are domain-agnostic, but the MEANING of
+  discovered knowledge is always shaped by context.
+
+The four questions every group must address:
+  Q1. Which association rules were the most surprising, and why?
+  Q2. Which clustering method produced the most interpretable segments?
+  Q3. What anomalies were found, and what do they suggest in a real banking context?
+  Q4. How do your findings compare to what another group discovered in a
+      different banking domain?
+
+--------------------------------------------------------------------------------
+SLIDE 0 — TITLE / SETUP
+--------------------------------------------------------------------------------
+Title: Knowledge Discovery in Bank Customer Churn
+Subtitle: Group 5 — Mining Expo | KDD 5-Phase Pipeline
+Facts for the footer:
+- Dataset: Bank Customer Churn (Kaggle), 10,000 customers, 14 features, 3 countries
+- Baseline churn rate: 20.4%
+- Methods: K-Means / DBSCAN / Hierarchical, Apriori, IQR / Z-score / Isolation
+  Forest + Mahalanobis / LOF (multivariate extension)
+- Framing: discovery and interpretation, NOT prediction accuracy
+
+--------------------------------------------------------------------------------
+SLIDE 1 — Q1: MOST SURPRISING ASSOCIATION RULES
+--------------------------------------------------------------------------------
+Headline: The bank is losing SENIORS with shallow relationships — and Germany
+compounds everything.
+
+Rule table (all consequent = Churned; baseline churn 20.4%):
+  #1 MOST SURPRISING: {Inactive AND Senior AND 1 Product}
+     Support 4.05% | Confidence 77.3% | Lift 3.79
+     Why surprising: inactivity alone is a much weaker signal — the risk EXPLODES
+     only when inactivity intersects senior age (46-60) and single-product depth.
+     ~4 in 5 of these customers left. Simple cross-tabs never show this.
+
+  #2 {Senior AND Germany}
+     Support 3.38% | Confidence 67.3% | Lift 3.31
+     Why surprising: German seniors churn at >3x baseline REGARDLESS of activity
+     or product count. Suggests a structural product-fit or service issue in the
+     German market, not just an age effect. Extra credibility: Geography was NOT
+     used in clustering distance, so this is not a modeling artifact.
+
+  #3 ASSIGNED HYPOTHESIS — CONFIRMED: {Germany AND Inactive AND 1 Product}
+     Support 3.75% | Confidence 52.1% | Lift 2.56
+     The project's assigned hypothesis ("inactive German single-product customers
+     are a strong churn profile") is validated at 2.5x baseline.
+
+Supporting depth (if asked): 10 rules documented (A-J), thresholds justified
+(support >= 0.03 ~ 300 customers, confidence >= 0.50, lift >= 1.5); credit card
+ownership does NOT protect single-product seniors (lift ~2.9); the bank retains
+wealthy seniors but loses MID-balance seniors (50-125K, lift ~2.8).
+
+Key takeaway line for the slide:
+"Churn risk is an INTERACTION effect: age x engagement x product depth.
+No single attribute tells this story."
+
+--------------------------------------------------------------------------------
+SLIDE 2 — Q2: MOST INTERPRETABLE CLUSTERING METHOD
+--------------------------------------------------------------------------------
+Headline: K-Means (K=3) gave the most interpretable personas; DBSCAN earned its
+keep elsewhere — as an anomaly detector.
+
+Answer: K-MEANS with K=3.
+
+Evidence for K choice (both metrics, honestly interpreted):
+- Elbow: inertia falls smoothly 54.4K (K=2) -> 31.8K (K=12), no sharp kink;
+  marginal gains shrink steadily after K=4.
+- Silhouette: peaks at K=2 (0.164), K=3 = 0.150 — weak global structure.
+- Decision: K=3 chosen INSIDE the defensible K=2-4 range because it yields the
+  most interpretable personas without over-splitting. (Be upfront: these are
+  descriptive personas, not sharply separated natural populations.)
+
+The three personas (named ONLY from dimensions that statistically separate them —
+Balance eps^2=0.727, NumOfProducts eps^2=0.713, Geography V=0.327):
+  C0 "High-Balance Multi-Product Germany-Skew Mixed-Risk"
+     2,169 customers (21.7%) | churn 21.8% | 52% German | 2.13 products avg
+  C1 "High-Balance Single-Product France-Skew Watchlist"
+     4,168 customers (41.7%) | churn 25.6% | 100% single-product | THE watchlist
+  C2 "Zero-Balance Multi-Product France-Skew Loyalist"
+     3,663 customers (36.6%) | churn 13.6% | 98.4% zero balance | Germany ~absent
+
+Cross-checks (shows method understanding):
+- Ward hierarchical: silhouette 0.128 but ARI 0.746 / NMI 0.701 agreement with
+  K-Means -> confirms the same broad structure. Dendrograms compared across
+  single / complete / average / ward linkages.
+- DBSCAN (eps=1.25 via k-NN graph): poor for personas, but its 554 noise points
+  churn at 62.6% — repurposed as the Phase 4 structural anomaly source.
+
+Key takeaway line:
+"K-Means named the segments; DBSCAN found the strangers. Using each method for
+what it is actually good at IS the discovery skill."
+
+--------------------------------------------------------------------------------
+SLIDE 3 — Q3: ANOMALIES FOUND + REAL BANKING MEANING
+--------------------------------------------------------------------------------
+Headline: The riskiest customers are not extreme on ANY single value — they are
+unusual COMBINATIONS of normal values.
+
+Detection scoreboard (churn rate among flagged; baseline 20.4%):
+  IQR (univariate)               374 flagged | 23.5% churn
+  Z-score (univariate)           141 flagged | 13.5% churn  <- BELOW baseline!
+  Isolation Forest (multivar.)   500 flagged | 49.0% churn
+  DBSCAN noise (Phase 2)         554 flagged | 62.6% churn  <- strongest detector
+  Robust Mahalanobis (extension) 142 flagged | 58.5% churn
+  LOF (extension)                500 flagged | 32.4% churn
+
+Headline discovery (multivariate extension):
+- 580 records are flagged ONLY by multivariate methods; 90% of them have NO
+  single feature beyond |z|=3. They churn at 45.3% — the highest of all segments.
+- Meaning: single-feature monitoring dashboards structurally CANNOT see the
+  bank's riskiest customers. Risk is relational, not marginal.
+
+Cross-reference with Phase 2 (explicitly required, done):
+- IF vs DBSCAN agreement: 336 shared records, Jaccard 0.468, kappa 0.617 —
+  two different structural paradigms converging on the same unusual customers.
+
+Anomaly typology (876 flagged records classified with evidence):
+  A: Data Error          2 (0.2%)  -> data-quality review only
+  B: Rare Valid        468 (53.4%) -> e.g., young high-balance customers,
+                                      4-product holders; monitor, do NOT delete
+  C: Risk Signal       406 (46.3%) -> 221 density-outlier churners,
+                                      136 high-balance pre-churn (avg ~150K,
+                                      46% German), 44 disengaged single-product,
+                                      5 senior high-value departures
+
+Real banking context (say this out loud):
+- High-balance pre-churn cases are the most financially painful: modest churn
+  LIFT but very large money walking out; needs relationship-manager outreach.
+- Rare-valid cases prove anomaly does not equal problem: half of all flags are
+  legitimate unusual customers; deleting them would erase discovery value.
+
+--------------------------------------------------------------------------------
+SLIDE 4 — Q4: CROSS-GROUP COMPARISON
+--------------------------------------------------------------------------------
+Headline: Same pipeline, different domain, different KNOWLEDGE — churn is about
+relationship depth; fraud/credit risk are about capacity and transactions.
+
+Our domain's signature (prepared position):
+- In churn, ENGAGEMENT and RELATIONSHIP-DEPTH variables dominate discovery
+  (Age, NumOfProducts, IsActiveMember, Geography, Balance), while classic
+  financial-capacity variables (CreditScore, EstimatedSalary) are nearly
+  useless — near-zero correlation AND near-zero information gain.
+
+Ready-made contrasts (fill in the other group's actual numbers at the expo):
+- vs FRAUD (Groups 3/8): fraud anomalies are adversarial and hidden by intent;
+  our churn anomalies are behavioral and hidden by dimensionality. Both groups
+  likely found that the interesting records are combination-anomalies — compare
+  their fraud flags with our 580 multivariate-only pool (45.3% churn).
+- vs CREDIT RISK / MORTGAGE (e.g., Group 4): their discovery variables should be
+  exactly the capacity variables (income, credit score, LTV) that are DEAD in
+  our dataset. Same algorithms, inverted variable importance — the cleanest
+  possible proof that meaning is domain-shaped.
+- vs AML: AML flags network/velocity patterns across transactions; we flag
+  cross-sectional profile patterns. Both rely on "unusual combination" logic
+  rather than single-threshold rules.
+- Shared methodology lesson to state: every group had to discretize, tune
+  support/confidence thresholds, and defend K — the pipeline is domain-agnostic,
+  the knowledge is not.
+
+[PLACEHOLDER — before the expo, note 2-3 concrete findings from one other group
+and slot them here for the live comparison.]
+
+--------------------------------------------------------------------------------
+SLIDE 5 — CENTRAL KDD ANSWER (CLOSER)
+--------------------------------------------------------------------------------
+"What did we discover that was not already obvious from the raw data?"
+1. Churn risk is an interaction profile, not an attribute: inactive senior
+   single-product customers churn at 77% (3.8x baseline).
+2. Germany is a structural retention problem, not a demographic quirk — and it
+   emerged POST-clustering, so it is a discovered pattern, not an artifact.
+3. The 41.7% of the book that is high-balance + single-product is the true
+   watchlist segment (25.6% churn) — invisible in any single-column view.
+4. The riskiest anomalies are combinations of individually normal values
+   (45.3% churn, 90% with no |z|>3) — unusualness in this book is relational,
+   not marginal.
+5. Anomaly does not mean error: 53% of flagged records are rare-but-legitimate
+   customers worth keeping.
+
+--------------------------------------------------------------------------------
+ANTICIPATED EXPO QUESTIONS + PREPARED ANSWERS
+--------------------------------------------------------------------------------
+Q: "Your silhouette is only 0.15 — aren't your clusters meaningless?"
+A: Weak global separation is reported honestly; K=3 is a descriptive persona
+   solution chosen inside the defensible K=2-4 range. Separation is real on the
+   dimensions that matter (Balance eps^2=0.73, Products eps^2=0.71) and the
+   personas are validated by an external lens (churn 13.6% vs 25.6%).
+
+Q: "Why is the churn label in the data if this isn't prediction?"
+A: Used strictly as a post-hoc validation lens for profiling — never as a
+   supervised target. No classifier, no accuracy metric anywhere.
+
+Q: "Why did you add Mahalanobis/LOF when the task only asks IQR/Z/IF?"
+A: IQR/Z are univariate; comparing them against a multivariate family let us
+   decompose WHY methods disagree — which produced the single strongest finding
+   of Phase 4. Extension beyond requirements, not replacement.
+
+Q: "Class C risk signals churn at 100% — isn't that circular?"
+A: Yes, by design and disclosed: the typology uses observed churn as supporting
+   evidence to CLASSIFY flagged anomalies, not to predict. The forward-looking
+   value is the profile definition, applied to still-active customers.
+
+Q: "Why lift and not just confidence?"
+A: Confidence inherits the base rate; lift normalizes by it. A 77% confidence
+   rule matters because baseline is 20.4% (lift 3.79), not because 77% is big.
+
+================================================================================
+NUMBERS CHEAT SHEET (one glance before presenting)
+Baseline churn 20.4% | 10,000 records | Top rule lift 3.79 / conf 77.3%
+K=3, silhouette 0.150 (peak 0.164 at K=2) | ARI vs Ward 0.746
+DBSCAN: eps 1.25, 554 noise, 62.6% churn | IF/DBSCAN kappa 0.617
+Multivariate-only: 580 recs, 45.3% churn, 90% no |z|>3 | Mahalanobis churn 58.5%
+Typology: 2 errors / 468 rare-valid / 406 risk signals (of 876 flagged)
+================================================================================
