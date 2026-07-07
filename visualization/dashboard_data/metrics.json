@@ -5,8 +5,8 @@
   "churn_rate": 20.37,
   "n_churned": 2037,
   "n_clusters": 3,
-  "n_churn_rules": 13,
-  "n_rules_total": 520,
+  "n_churn_rules": 17,
+  "n_rules_total": 645,
   "top_rule_lift": 3.79,
   "top_rule_conf": 77.3,
   "n_flagged": 876,
@@ -128,27 +128,23 @@
   "Balance_Band": {
    "labels": [
     "Zero balance",
-    "Low (<50K)",
-    "Mid (50-125K)",
-    "High (>125K)"
+    "Insured (0-100K)",
+    "Above ceiling (>100K)"
    ],
    "churn_pct": [
     13.82,
-    34.67,
-    23.99,
-    23.91
+    20.58,
+    25.23
    ],
    "churned": [
     500,
-    26,
-    858,
-    653
+    326,
+    1211
    ],
    "total": [
     3617,
-    75,
-    3577,
-    2731
+    1584,
+    4799
    ]
   },
   "Tenure_Band": {

@@ -144,9 +144,11 @@ DIM_INSIGHTS = {
     "NumOfProducts": ("The U-curve: two products is the safety sweet spot (7.6%), one product nearly "
                       "quadruples the risk (27.7%), and 3-4 products are near-certain leavers "
                       "(83% / 100%) - likely distressed or mis-sold relationships."),
-    "Balance_Band": ("Zero-balance customers churn LESS (13.8%) than mid- and high-balance ones "
-                     "(~25% / 24%). Balance does not anchor loyalty - the bank's wealthiest are not "
-                     "its safest."),
+    "Balance_Band": ("Churn rises monotonically with the band: zero balance 13.8%, insured "
+                     "(0-100K) 20.6%, above the EUR 100K deposit-guarantee ceiling 25.2%. Balance "
+                     "does not anchor loyalty - deposits beyond the state guarantee are the most "
+                     "flight-prone, and senior variants of this band reach 58-73% churn in the "
+                     "Phase-3 rules."),
     "Tenure_Band": ("Churn is flat across tenure (~19-22%). Years with the bank buy almost no "
                     "protection - engagement depth, not relationship length, is what matters."),
 }

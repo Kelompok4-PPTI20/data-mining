@@ -350,7 +350,7 @@ PIPELINE = [
     ("ph2", "Phase 2", "Segment (clustering)",
      "K-Means / Ward / DBSCAN → 3 named personas, method-stable (ARI 0.75)."),
     ("ph3", "Phase 3", "Mine rules (Apriori)",
-     "3,972 itemsets → 520 rules → 13 churn rules at ≥ 2.5× lift. Hypothesis confirmed."),
+     "4,105 itemsets → 645 rules → 17 churn rules at ≥ 2.5× lift. Hypothesis confirmed."),
     ("ph4", "Phase 4", "Detect anomalies",
      "6 detectors compared; risk lives in unusual COMBINATIONS (45% churn), not extremes."),
     ("report", "Phase 5", "Communicate",

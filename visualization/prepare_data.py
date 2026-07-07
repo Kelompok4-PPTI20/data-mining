@@ -149,9 +149,12 @@ rec["MAHA_dist2"] = anom["MAHA_dist2"].round(3)
 rec["Age_Band"] = pd.cut(rec["Age"], [0, 30, 45, 60, 100],
                          labels=["Young adult (18-30)", "Middle-aged (31-45)",
                                  "Senior (46-60)", "Elderly (60+)"])
-rec["Balance_Band"] = pd.cut(rec["Balance"], [-1, 0, 50_000, 125_000, rec["Balance"].max()],
-                             labels=["Zero balance", "Low (<50K)",
-                                     "Mid (50-125K)", "High (>125K)"])
+# Balance bands anchored on the EUR 100,000 EU deposit-guarantee ceiling
+# (Directive 2014/49/EU) — same boundaries as the notebook Path-B binning:
+#   https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=celex:32014L0049
+rec["Balance_Band"] = pd.cut(rec["Balance"], [-1, 0, 100_000, rec["Balance"].max()],
+                             labels=["Zero balance", "Insured (0-100K)",
+                                     "Above ceiling (>100K)"])
 rec["Active_Status"] = rec["IsActiveMember"].map({1: "Active", 0: "Inactive"})
 rec["Churn_Status"] = rec["Exited"].map({1: "Churned", 0: "Retained"})
 rec.to_csv(OUT / "records.csv", index=False)
@@ -168,7 +171,7 @@ M["kpi"] = {
     "churn_rate": round(baseline * 100, 2),
     "n_churned": int(df["Exited"].sum()),
     "n_clusters": 3,
-    "n_churn_rules": 13,
+    "n_churn_rules": 17,   # under the DGS-anchored balance bands (was 13 with 50K/125K)
     "n_rules_total": int(len(all_rules)),
     "top_rule_lift": round(float(top_rules["Lift"].max()), 2),
     "top_rule_conf": round(float(top_rules["Confidence (%)"].max()), 1),
@@ -420,7 +423,8 @@ PRETTY = {
     "CrCard_Status_Has_CrCard": "Has credit card", "CrCard_Status_No_CrCard": "No credit card",
     "Gender_Female": "Female", "Gender_Male": "Male",
     "Geography_Germany": "Germany", "Geography_France": "France", "Geography_Spain": "Spain",
-    "Balance_Band_Mid_Balance": "Mid balance (50-125K)", "Balance_Band_High_Balance": "High balance (>125K)",
+    "Balance_Band_Insured_Balance": "Insured balance (0-100K)",
+    "Balance_Band_Above_DGS_Ceiling": "Above DGS ceiling (>100K)",
     "Balance_Band_Zero_Balance": "Zero balance",
     "Churn_Status_Churned": "CHURNED",
 }
@@ -453,9 +457,18 @@ COMMENTARY = {
     frozenset({"Age_Band_Senior", "Gender_Female"}):
         ("Senior + female alone - without inactivity or product-count conditions - already clears "
          "the 2.5x lift bar. The two demographics compound."),
-    frozenset({"Age_Band_Senior", "Balance_Band_Mid_Balance"}):
-        ("Mid-balance (50-125K) seniors are at risk while high-balance seniors are noticeably less "
-         "so: the bank retains the wealthy and loses the middle."),
+    frozenset({"Active_Status_Inactive", "Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling"}):
+        ("New with the DGS-anchored binning: inactive seniors holding more than the EUR 100K "
+         "deposit-guarantee ceiling churn at 72.6%. Money above the state guarantee is the most "
+         "mobile money in the book - the highest-priority relationship-manager list."),
+    frozenset({"Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling", "Products_Label_Products_1"}):
+        ("Single-product seniors above the insured ceiling - high-value, shallow-anchored, "
+         "uninsured excess: the costliest churn profile per customer."),
+    frozenset({"Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling"}):
+        ("Seniors above the EUR 100K ceiling churn at 57.7% (~3x baseline). Under the old 50-125K "
+         "binning this pattern was split across two bands and read as 'the bank retains the "
+         "wealthy' - the regulatory boundary reverses that conclusion: uninsured excess is the "
+         "most flight-prone money."),
     frozenset({"Age_Band_Senior", "CrCard_Status_Has_CrCard", "Gender_Female"}):
         ("Female senior cardholders - the same story again: the card alone does not anchor the "
          "relationship."),
@@ -485,7 +498,7 @@ for i, r in top_rules.iterrows():
         "commentary": COMMENTARY.get(items, "High-lift churn profile - see rule table."),
     })
 
-# All 13 churn-consequent rules (single consequent) from the full rule file
+# All churn-consequent rules from the full rule file (17 under the DGS bands)
 def frozen_ok(s):
     try:
         return parse_frozen(s)

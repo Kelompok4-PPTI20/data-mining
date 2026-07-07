@@ -323,18 +323,20 @@ phase3 = html.Div([
     ], className="banner banner--success"),
 
     C.statband([
-        stat("3,972", "Frequent itemsets", "Apriori, min support 3% (≥ ~300 customers)"),
-        stat("520", "Rules pass filters", "confidence ≥ 50% and lift ≥ 1.5"),
-        stat("13", "Churn-consequent rules", "the rubric needs 10 — every one ≥ 2.5× baseline"),
+        stat("4,105", "Frequent itemsets", "Apriori, min support 3% (≥ ~300 customers)"),
+        stat("645", "Rules pass filters", "confidence ≥ 50% and lift ≥ 1.5"),
+        stat("17", "Churn-consequent rules", "the rubric needs 10 — every one ≥ 2.5× baseline"),
         stat("3.79×", "Strongest lift", "inactive senior, 1 product → 77.3% churn",
              tone=T.CRITICAL, primary=True),
     ]),
 
     callout(["With a 20.4% base rate, demanding confidence ≥ 50% mathematically forces lift "
              "≥ 2.45 — so ", html.B("every rule that survived more than doubles churn risk"),
-             ". Only 13 of 520 rules concern churn: that is the filter working, not a "
-             "shortage. The other 507 are structural co-occurrences (geography ↔ balance "
-             "bands etc.), kept in the saved file for transparency."],
+             ". Only 17 of 645 rules concern churn: that is the filter working, not a "
+             "shortage. The other 628 are structural co-occurrences (geography ↔ balance "
+             "bands etc.), kept in the saved file for transparency. Re-binning balance on "
+             "the EUR 100K deposit-guarantee ceiling (Directive 2014/49/EU) raised the churn-"
+             "rule count from 13 to 17 — five rules now involve above-ceiling balances."],
             title="Why so few rules survive"),
 
     section("The rule network", meta="how the top-10 rules share attributes"),
@@ -345,7 +347,8 @@ phase3 = html.Div([
              C.graph(F.RULE_NETWORK_FIG),
              insight(["One attribute sits at the heart of almost every rule: ", html.B(
                  "Senior (46–60)"), ". Churn risk compounds when senior age meets inactivity, "
-                 "single-product holdings, female gender or German geography. The bank is not "
+                 "single-product holdings, female gender, German geography or a balance above "
+                 "the EUR 100K deposit-guarantee ceiling. The bank is not "
                  "losing customers at random — it is losing ", html.B(
                      "a specific, describable population"), "."])),
         card("Rule quality at a glance",
@@ -555,11 +558,15 @@ report = html.Div([
              [html.B("{Inactive ∩ Senior ∩ 1 product} → churn"), " (77.3% confidence, lift "
               "3.79) — not because inactivity matters, but because the AGE interaction "
               "transforms it: younger inactives usually re-engage, senior inactives leave "
-              "for good. Second: ", html.B("{Senior ∩ Germany} → churn"), " (67.3%, lift "
-              "3.31) — it survives despite geography being excluded from clustering "
-              "distance, making the German signal a discovered profile rather than an "
-              "artifact. The assigned hypothesis {Germany ∩ Inactive ∩ 1 product} was "
-              "confirmed at 52.1% confidence, lift 2.56."]),
+              "for good. Second: ", html.B("{Inactive ∩ Senior ∩ balance > EUR 100K} → churn"),
+              " (72.6%, lift 3.57) — visible only after balance was re-binned on the EU "
+              "deposit-guarantee ceiling: money above the state guarantee is the most "
+              "flight-prone in the book. Third: ", html.B("{Senior ∩ Germany} → churn"),
+              " (67.3%, lift 3.31) — it survives despite geography being excluded from "
+              "clustering distance, making the German signal a discovered profile rather "
+              "than an artifact. The assigned hypothesis {Germany ∩ Inactive ∩ 1 product} "
+              "was confirmed at 52.1% confidence, lift 2.56 (55.7% for its above-ceiling "
+              "variant)."]),
         C.qa("Q2 · Which clustering method produced the most interpretable segments?",
              ["K-Means at K=3 — chosen over the silhouette-peak K=2, which merely restates "
               "the bimodal balance column. Ward hierarchical validates the partition "

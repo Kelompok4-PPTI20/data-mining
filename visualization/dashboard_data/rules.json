@@ -25,6 +25,27 @@
    "rank": 2,
    "letter": "B",
    "if_items": [
+    "Above DGS ceiling (>100K)",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Age_Band_Senior",
+    "Balance_Band_Above_DGS_Ceiling"
+   ],
+   "then": "Churned",
+   "support_pct": 3.13,
+   "confidence_pct": 72.6,
+   "lift": 3.565,
+   "conviction": 2.909,
+   "customers": 313,
+   "commentary": "New with the DGS-anchored binning: inactive seniors holding more than the EUR 100K deposit-guarantee ceiling churn at 72.6%. Money above the state guarantee is the most mobile money in the book - the highest-priority relationship-manager list."
+  },
+  {
+   "rank": 3,
+   "letter": "C",
+   "if_items": [
     "Inactive member",
     "Senior (46-60)"
    ],
@@ -41,8 +62,8 @@
    "commentary": "Inactivity alone is a much weaker signal - it is the AGE interaction that drives risk. Seniors who go quiet tend to disengage permanently, while younger inactive customers often re-engage on their own."
   },
   {
-   "rank": 3,
-   "letter": "C",
+   "rank": 4,
+   "letter": "D",
    "if_items": [
     "Has credit card",
     "Inactive member",
@@ -62,8 +83,8 @@
    "commentary": "Holding a credit card does not protect inactive seniors at all - the card is a shallow anchor. Risk is essentially identical to the card-free version of this profile."
   },
   {
-   "rank": 4,
-   "letter": "D",
+   "rank": 5,
+   "letter": "E",
    "if_items": [
     "Germany",
     "Senior (46-60)"
@@ -78,11 +99,11 @@
    "lift": 3.305,
    "conviction": 2.437,
    "customers": 338,
-   "commentary": "The most surprising rule: German seniors churn at >3x baseline regardless of activity or product count. It points to a product-fit or service-quality issue specific to the German operation, not just an age effect."
+   "commentary": "German seniors churn at >3x baseline regardless of activity or product count. It points to a product-fit or service-quality issue specific to the German operation, not just an age effect."
   },
   {
-   "rank": 5,
-   "letter": "E",
+   "rank": 6,
+   "letter": "F",
    "if_items": [
     "1 product only",
     "Female",
@@ -102,8 +123,8 @@
    "commentary": "A gender-age interaction invisible in simple cross-tabs: female seniors with a single product churn at 66%. Combine cross-sell with age-appropriate engagement."
   },
   {
-   "rank": 6,
-   "letter": "F",
+   "rank": 7,
+   "letter": "G",
    "if_items": [
     "1 product only",
     "Senior (46-60)"
@@ -121,8 +142,8 @@
    "commentary": "Single-product seniors churn at 61%. Cross-sell is the obvious lever - and the data shows the bank has historically failed to deepen exactly this segment."
   },
   {
-   "rank": 7,
-   "letter": "G",
+   "rank": 8,
+   "letter": "H",
    "if_items": [
     "1 product only",
     "Has credit card",
@@ -142,63 +163,44 @@
    "commentary": "A credit card does NOT reduce churn risk for single-product seniors. Card-only relationships are shallow relationships."
   },
   {
-   "rank": 8,
-   "letter": "H",
-   "if_items": [
-    "Female",
-    "Senior (46-60)"
-   ],
-   "if_raw": [
-    "Age_Band_Senior",
-    "Gender_Female"
-   ],
-   "then": "Churned",
-   "support_pct": 4.71,
-   "confidence_pct": 57.3,
-   "lift": 2.813,
-   "conviction": 1.865,
-   "customers": 471,
-   "commentary": "Senior + female alone - without inactivity or product-count conditions - already clears the 2.5x lift bar. The two demographics compound."
-  },
-  {
    "rank": 9,
    "letter": "I",
    "if_items": [
-    "Mid balance (50-125K)",
+    "1 product only",
+    "Above DGS ceiling (>100K)",
     "Senior (46-60)"
    ],
    "if_raw": [
     "Age_Band_Senior",
-    "Balance_Band_Mid_Balance"
+    "Balance_Band_Above_DGS_Ceiling",
+    "Products_Label_Products_1"
    ],
    "then": "Churned",
-   "support_pct": 3.67,
-   "confidence_pct": 56.2,
-   "lift": 2.759,
-   "conviction": 1.818,
-   "customers": 367,
-   "commentary": "Mid-balance (50-125K) seniors are at risk while high-balance seniors are noticeably less so: the bank retains the wealthy and loses the middle."
+   "support_pct": 3.51,
+   "confidence_pct": 59.6,
+   "lift": 2.926,
+   "conviction": 1.971,
+   "customers": 351,
+   "commentary": "Single-product seniors above the insured ceiling - high-value, shallow-anchored, uninsured excess: the costliest churn profile per customer."
   },
   {
    "rank": 10,
    "letter": "J",
    "if_items": [
-    "Female",
-    "Has credit card",
+    "Above DGS ceiling (>100K)",
     "Senior (46-60)"
    ],
    "if_raw": [
     "Age_Band_Senior",
-    "CrCard_Status_Has_CrCard",
-    "Gender_Female"
+    "Balance_Band_Above_DGS_Ceiling"
    ],
    "then": "Churned",
-   "support_pct": 3.14,
-   "confidence_pct": 55.3,
-   "lift": 2.714,
-   "conviction": 1.781,
-   "customers": 314,
-   "commentary": "Female senior cardholders - the same story again: the card alone does not anchor the relationship."
+   "support_pct": 4.89,
+   "confidence_pct": 57.7,
+   "lift": 2.834,
+   "conviction": 1.884,
+   "customers": 489,
+   "commentary": "Seniors above the EUR 100K ceiling churn at 57.7% (~3x baseline). Under the old 50-125K binning this pattern was split across two bands and read as 'the bank retains the wealthy' - the regulatory boundary reverses that conclusion: uninsured excess is the most flight-prone money."
   }
  ],
  "all_churn_rules": [
@@ -220,6 +222,16 @@
    "support_pct": 4.05,
    "confidence_pct": 51.5,
    "lift": 3.652
+  },
+  {
+   "if_items": [
+    "Above DGS ceiling (>100K)",
+    "Inactive member",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.13,
+   "confidence_pct": 72.6,
+   "lift": 3.565
   },
   {
    "if_items": [
@@ -280,6 +292,25 @@
   },
   {
    "if_items": [
+    "1 product only",
+    "Above DGS ceiling (>100K)",
+    "Senior (46-60)"
+   ],
+   "support_pct": 3.51,
+   "confidence_pct": 59.6,
+   "lift": 2.926
+  },
+  {
+   "if_items": [
+    "Above DGS ceiling (>100K)",
+    "Senior (46-60)"
+   ],
+   "support_pct": 4.89,
+   "confidence_pct": 57.7,
+   "lift": 2.834
+  },
+  {
+   "if_items": [
     "Female",
     "Senior (46-60)"
    ],
@@ -289,12 +320,24 @@
   },
   {
    "if_items": [
-    "Mid balance (50-125K)",
+    "Above DGS ceiling (>100K)",
+    "Has credit card",
     "Senior (46-60)"
    ],
-   "support_pct": 3.67,
-   "confidence_pct": 56.2,
-   "lift": 2.759
+   "support_pct": 3.34,
+   "confidence_pct": 56.7,
+   "lift": 2.784
+  },
+  {
+   "if_items": [
+    "1 product only",
+    "Above DGS ceiling (>100K)",
+    "Germany",
+    "Inactive member"
+   ],
+   "support_pct": 3.27,
+   "confidence_pct": 55.7,
+   "lift": 2.735
   },
   {
    "if_items": [
@@ -330,6 +373,6 @@
   "min_confidence": 0.5,
   "min_lift": 1.5
  },
- "n_total_rules": 520,
- "n_churn_rules": 13
+ "n_total_rules": 645,
+ "n_churn_rules": 17
 }
