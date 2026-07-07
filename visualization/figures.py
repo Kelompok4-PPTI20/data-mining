@@ -217,11 +217,13 @@ def _scatter(fig, x, y, name, color, symbol="circle", size=3.6, opacity=0.45, ho
 
 
 def _pca_layout(fig, height=430):
+    # reading guide (what left/right/up/down mean) lives in the card subtitle,
+    # so the axes carry only what an axis should: name + % of variance.
     evr = M["validation"]["pca_evr"]
     fig.update_layout(
         height=height,
-        xaxis_title=f"PC1 ({evr[0]}% of variance) - LEFT = higher balance | RIGHT = more products",
-        yaxis_title=f"PC2 ({evr[1]}%) - salary / tenure mix",
+        xaxis_title=f"PC1 · {evr[0]}% of variance",
+        yaxis_title=f"PC2 · {evr[1]}% of variance",
         legend=dict(itemsizing="constant"),
         margin=dict(l=10, r=14, t=10, b=10))
 

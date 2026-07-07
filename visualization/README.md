@@ -1,10 +1,13 @@
 # Phase 5 — Knowledge Discovery Dashboard (Python Dash)
 
 Interactive dashboard presenting the full KDD pipeline (Phases 1–4) for the
-Bank Customer Churn project, built for a non-technical audience. Visuals implement the **KDD Design Spec v1.0**
-(cool-slate neutrals, single Cobalt accent, Geist / Geist Mono, 56px header +
-248px sidebar shell): KPI cards, plain-language insight strips under every chart, and an explicit answer to the central question — *what did we
-discover that was not already obvious from the raw data?*
+Bank Customer Churn project, built for a non-technical audience. Visuals
+implement the **KDD Design System v2** (cool-slate neutrals, single Cobalt
+accent, Geist / Geist Mono, pipeline sidebar + phase page headers, stat bands,
+insight strips): see `DESIGN_RATIONALE.md` for every design decision, its UX
+principle and its trade-offs. The dashboard answers the central question
+explicitly — *what did we discover that was not already obvious from the raw
+data?*
 
 ## Run it
 
@@ -24,16 +27,18 @@ interrupted, just run it again.
 
 - **Interactive < 100 ms** — every figure is precomputed at startup; callbacks
   swap ready-made objects (measured 2–30 ms server-side). Interactions:
-  tab navigation, feature/dimension explorers (Phase 1), algorithm & color
-  switching on the cluster map (Phase 2), rule selector with business
-  commentary (Phase 3), outlier-map color modes (Phase 4), plus hover detail
-  on all 10,000-point maps.
+  pipeline navigation (sidebar, clickable pipeline cards, prev/next stage
+  footers), one-click feature/dimension explorers (Phase 1), algorithm & color
+  switching on the cluster map (Phase 2), click-a-row rule interpretations
+  (Phase 3), outlier-map color modes (Phase 4), plus hover detail on all
+  10,000-point maps.
 - **All required visualizations** — cluster maps (PCA, 3 algorithms), rule
   network + rule-quality scatter + ranked top-10 table, outlier plots
   (method comparison, consensus paradox, outlier map, class donut), and key
   distributions (retained vs churned, churn by dimension).
 - **Accessible to non-technical audience** — every card has a "what am I
-  looking at" subtitle and a "What this tells us" conclusion; the Knowledge
+  looking at" subtitle and a "What this tells us" conclusion; every page opens
+  with a phase header stating where you are in the KDD pipeline; the Knowledge
   Report tab answers the central discovery question directly, covers the four
   Mining Expo questions, and states limitations honestly.
 
@@ -41,14 +46,15 @@ interrupted, just run it again.
 
 | File | Role |
 |---|---|
-| `app.py` | Dash app: layout, 6 tabs, callbacks |
+| `app.py` | Dash app: shell, 6 pages, routing + interaction callbacks |
 | `figures.py` | All Plotly figures (built once at import) |
-| `components.py` | Cards, KPI tiles, insight strips, tables, personas |
-| `theme.py` | Palette + shared Plotly template (Google-inspired) |
+| `components.py` | Design-system primitives: page headers, stat bands, cards, insight strips, callouts, personas, tables, pipeline cards |
+| `theme.py` | Palette tokens + shared Plotly template |
 | `data.py` | Loads the precomputed cache |
 | `prepare_data.py` | Assembles `dashboard_data/` from Phase 1–4 artifacts |
-| `assets/styles.css` | Looker-style UI (auto-loaded by Dash) |
+| `assets/styles.css` | KDD Design System v2 (auto-loaded by Dash) |
 | `dashboard_data/` | Generated cache: `records.csv`, `metrics.json`, `rules.json` |
+| `DESIGN_RATIONALE.md` | The v2 redesign: critique of v1, every decision + UX principle + trade-off |
 
 ## Numbers trace to the notebook
 
