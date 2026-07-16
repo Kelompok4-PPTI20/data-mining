@@ -1,5 +1,5 @@
 """
-Phase 5 — Dashboard data preparation
+Phase 5: Dashboard data preparation
 ====================================
 Assembles every number the dashboard shows into a small cache folder
 (`visualization/dashboard_data/`) so the Dash app itself does ZERO mining at
@@ -150,7 +150,7 @@ rec["Age_Band"] = pd.cut(rec["Age"], [0, 30, 45, 60, 100],
                          labels=["Young adult (18-30)", "Middle-aged (31-45)",
                                  "Senior (46-60)", "Elderly (60+)"])
 # Balance bands anchored on the EUR 100,000 EU deposit-guarantee ceiling
-# (Directive 2014/49/EU) — same boundaries as the notebook Path-B binning:
+# (Directive 2014/49/EU), using the same boundaries as the notebook Path-B binning:
 #   https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=celex:32014L0049
 rec["Balance_Band"] = pd.cut(rec["Balance"], [-1, 0, 100_000, rec["Balance"].max()],
                              labels=["Zero balance", "Insured (0-100K)",

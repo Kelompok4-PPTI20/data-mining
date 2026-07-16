@@ -79,7 +79,7 @@ OV_COMBO = ov_bar(
 
 
 # ---------------------------------------------------------------------------
-# PHASE 1 — distributions
+# PHASE 1: distributions
 # ---------------------------------------------------------------------------
 
 DIST_FEATURES = ["Age", "Balance", "NumOfProducts", "CreditScore", "Tenure", "EstimatedSalary"]
@@ -208,7 +208,7 @@ FEATSEL_FIG = make_featsel_fig()
 
 
 # ---------------------------------------------------------------------------
-# PHASE 2 — cluster map, validation, profiles
+# PHASE 2: cluster map, validation, profiles
 # ---------------------------------------------------------------------------
 
 def _scatter(fig, x, y, name, color, symbol="circle", size=3.6, opacity=0.45, hover=None):
@@ -390,7 +390,7 @@ CLUSTER_CHURN_FIG = make_cluster_churn_fig()
 
 
 # ---------------------------------------------------------------------------
-# PHASE 3 — rule network, scatter
+# PHASE 3: rule network, scatter
 # ---------------------------------------------------------------------------
 
 def make_rule_network():
@@ -523,7 +523,7 @@ RULE_SCATTER_FIG = make_rule_scatter()
 
 
 # ---------------------------------------------------------------------------
-# PHASE 4 — anomaly figures
+# PHASE 4: anomaly figures
 # ---------------------------------------------------------------------------
 
 def make_method_fig():
@@ -608,10 +608,10 @@ def make_outlier_scatter(colorby):
                      f"{status} ({m.sum():,})", T.CHURN_COLORS[status],
                      opacity=0.35 if status == "Retained" else 0.55, hover=hover[m])
     else:
-        groups = [("Normal — Not Flagged", "Not flagged", "#B7BEC9", 3.0, 0.3),
-                  ("B:", "B - Rare but legitimate", T.AMBER, 4.5, 0.75),
-                  ("C:", "C - RISK SIGNAL", T.RED, 4.5, 0.8),
-                  ("A:", "A - Suspected data error", T.PURPLE, 9, 1.0)]
+        groups = [("Normal", "Not flagged", "#B7BEC9", 3.0, 0.3),
+                  ("B:", "B: Rare but legitimate", T.AMBER, 4.5, 0.75),
+                  ("C:", "C: RISK SIGNAL", T.RED, 4.5, 0.8),
+                  ("A:", "A: Suspected data error", T.PURPLE, 9, 1.0)]
         for prefix, name, color, size, op in groups:
             m = REC["Anomaly_Class"].str.startswith(prefix)
             _scatter(fig, REC.loc[m, "Balance"], REC.loc[m, "IF_score"],
@@ -632,9 +632,9 @@ OUTLIER_FIGS = {c: make_outlier_scatter(c) for c in ["class", "churn"]}
 def make_class_donut():
     flagged = REC[REC["Composite_Anomaly_Score"] >= 1]
     counts = {
-        "C - Risk signal": int(flagged["Anomaly_Class"].str.startswith("C").sum()),
-        "B - Rare but valid": int(flagged["Anomaly_Class"].str.startswith("B").sum()),
-        "A - Suspected data error": int(flagged["Anomaly_Class"].str.startswith("A").sum()),
+        "C: Risk signal": int(flagged["Anomaly_Class"].str.startswith("C").sum()),
+        "B: Rare but valid": int(flagged["Anomaly_Class"].str.startswith("B").sum()),
+        "A: Suspected data error": int(flagged["Anomaly_Class"].str.startswith("A").sum()),
     }
     fig = _base(300)
     fig.add_pie(labels=list(counts.keys()), values=list(counts.values()), hole=0.62,
@@ -656,17 +656,21 @@ CLASS_DONUT_FIG = make_class_donut()
 def make_subtype_fig():
     rows = sorted(M["anomaly_classes"], key=lambda r: r["n"])
     short = {
-        "B: Rare Valid — Statistically Unusual Pattern": "B - Unusual but valid pattern",
-        "B: Rare Valid — Young High-Balance Customer": "B - Young, high balance",
-        "B: Rare Valid — Maximum Product Holder": "B - Holds 4 products",
-        "C: Risk Signal — Density Outlier + Churned": "C - Density outlier + churned",
-        "C: Risk Signal — High-Balance Pre-Churn": "C - High-balance pre-churn",
-        "C: Risk Signal — Disengaged Single-Product Churn": "C - Disengaged single-product",
-        "C: Risk Signal — Senior High-Value Departure": "C - Senior high-value departure",
-        "A: Data Error": "A - Suspected data error",
+        "Statistically Unusual Pattern": "B: Unusual but valid pattern",
+        "Young High-Balance Customer": "B: Young, high balance",
+        "Maximum Product Holder": "B: Holds 4 products",
+        "Density Outlier + Churned": "C: Density outlier + churned",
+        "High-Balance Pre-Churn": "C: High-balance pre-churn",
+        "Disengaged Single-Product Churn": "C: Disengaged single-product",
+        "Senior High-Value Departure": "C: Senior high-value departure",
+        "Data Error": "A: Suspected data error",
     }
+
+    def short_label(value):
+        return next((label for marker, label in short.items() if marker in value), value)
+
     fig = _base(300)
-    fig.add_bar(y=[short.get(r["cls"], r["cls"]) for r in rows], x=[r["n"] for r in rows],
+    fig.add_bar(y=[short_label(r["cls"]) for r in rows], x=[r["n"] for r in rows],
                 orientation="h",
                 marker_color=[T.RED if r["cls"].startswith("C") else
                               T.PURPLE if r["cls"].startswith("A") else T.AMBER for r in rows],

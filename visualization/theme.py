@@ -1,5 +1,5 @@
 """
-Design tokens + Plotly template — implements the KDD Design Spec (v1.0).
+Design tokens + Plotly template; implements the KDD Design Spec (v1.0).
 
 Cool-slate neutral ramp, one Cobalt accent, semantic solid+tint pairs,
 8-series categorical dataviz palette, Geist / Geist Mono typography.

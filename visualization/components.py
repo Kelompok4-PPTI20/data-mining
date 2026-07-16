@@ -1,9 +1,9 @@
-"""Reusable layout primitives — KDD Design System v2.
+"""Reusable layout primitives for KDD Design System v2.
 
 Rules the system enforces (see DESIGN_RATIONALE.md):
 * One container level: a boxed element never wraps another boxed element.
   Cards hold content; standalone conclusions use `callout`, not card+insight.
-* KPI rows are a single `statband` region with hairline dividers — five
+* KPI rows are a single `statband` region with hairline dividers; five
   numbers read as one scannable row, not five competing cards.
 * Every page opens with a `page_header` (phase kicker · H1 · one-line purpose).
 * Navigation targets are real <button>s (keyboard-focusable), wired through
@@ -45,7 +45,7 @@ def control(label, component):
 
 def pills(pid, options, value):
     """Segmented control. Same id/value contract as the old dropdowns, so
-    existing callbacks keep working — one click instead of open-scan-click."""
+    existing callbacks keep working with one click instead of open-scan-click."""
     return dcc.RadioItems(
         id=pid, options=options, value=value, className="radio-pills",
         inputStyle={"display": "none"}, labelStyle={"display": "inline-flex"})
@@ -102,7 +102,7 @@ def stat(value, label, sub="", tone=None, primary=False):
 
 
 def statband(stats):
-    """One region, hairline dividers — replaces N separate KPI cards."""
+    """One region with hairline dividers; replaces N separate KPI cards."""
     return html.Div(stats, className="statband")
 
 
@@ -150,7 +150,7 @@ def insight(text, kind="", icon=None, title=None):
 
 
 def callout(text, kind="", title="Verdict"):
-    """Standalone conclusion block — same voice as insight strips but WITHOUT
+    """Standalone conclusion block; same voice as insight strips but WITHOUT
     a wrapping card, so verdicts never render as a box inside a box."""
     cls = f"callout callout--{kind}" if kind else "callout"
     return html.Div([
@@ -166,17 +166,17 @@ def callout(text, kind="", title="Verdict"):
 
 PERSONA_TAGLINE = {
     1: "41.7% of the book keeps six-figure money here but only ONE product. Nothing but inertia "
-       "anchors them — and they churn the most.",
-    0: "Engaged, wealthy, multi-product — and over half German. Churn is only average, but when "
+       "anchors them, and they churn the most.",
+    0: "Engaged, wealthy and multi-product; over half are German. Churn is only average, but when "
        "they do leave, it is the costliest money walking out.",
-    2: "Zero balance yet TWO products on average — salary-account style usage. Germany is almost "
+    2: "Zero balance yet TWO products on average, resembling salary-account usage. Germany is almost "
        "absent (0.7%). The bank's quiet retention anchor.",
 }
 
 PERSONA_NOTE = {
-    1: "Highest-churn segment — deepen the relationship (second product) before the money leaves.",
-    0: "Risk is individual, not segment-wide — monitor high-value accounts, don't blanket-target.",
-    2: "Lowest-risk group — a model of what product breadth does for retention.",
+    1: "Highest-churn segment; deepen the relationship with a second product before the money leaves.",
+    0: "Risk is individual, not segment-wide; monitor high-value accounts, don't blanket-target.",
+    2: "Lowest-risk group, a model of what product breadth does for retention.",
 }
 
 PERSONA_RISK = {
@@ -212,7 +212,7 @@ def persona_card(k):
 
 
 # ===========================================================================
-# rule table (Phase 3) — rows ARE the selector (direct manipulation)
+# rule table (Phase 3): rows ARE the selector (direct manipulation)
 # ===========================================================================
 
 def _lift_bar(lift, max_lift=3.8):
@@ -268,25 +268,25 @@ def rule_detail(letter):
 DECISIONS = [
     ("Identifier & PII columns", "Dropped RowNumber, CustomerId, Surname",
      "Index artifacts and personally identifying text carry no behavioral signal and risk leakage."),
-    ("Missing values", "None found — no imputation",
+    ("Missing values", "None found; no imputation",
      "0 nulls confirmed across all 14 columns; imputing would only add artificial structure."),
-    ("Duplicates & consistency", "None found — no removal",
+    ("Duplicates & consistency", "None found; no removal",
      "0 duplicate rows / IDs; all values inside domain-valid ranges; category labels clean."),
     ("Outliers (Age, CreditScore)", "RETAINED, not deleted",
      "Seniors and low-score customers are real segments. Deleting them would have erased the "
-     "project's main finding — they are re-examined in Phase 4 instead."),
-    ("Scaling (Path A — clustering)", "StandardScaler on 6 numeric fields",
+     "project's main finding; they are re-examined in Phase 4 instead."),
+    ("Scaling (Path A: clustering)", "StandardScaler on 6 numeric fields",
      "Balance/Salary live in the 100K range vs products in 1–4; unscaled, Euclidean distance "
      "would be a balance ruler."),
     ("Geography & Gender", "EXCLUDED from clustering distance",
      "Nominal categories one-hot-encoded into Euclidean space would force country/gender splits. "
-     "They are reintroduced AFTER clustering — so any country skew is a discovery, not an artifact."),
-    ("Binning (Path B — rules)", "Domain-anchored bands, not equal-width",
+     "They are reintroduced AFTER clustering, so any country skew is a discovery, not an artifact."),
+    ("Binning (Path B: rules)", "Domain-anchored bands, not equal-width",
      "Credit-score tiers, life-stage ages (Senior = 46–60), a dedicated Zero-Balance bin for the "
      "36% spike, salary quartiles. Equal-width bins would bury the balance spike."),
     ("Feature selection", "Correlation + entropy, used as a guide",
      "Both lenses agree on Age/IsActiveMember; entropy alone catches NumOfProducts. Weak features "
-     "stay in unsupervised phases — churn is a validation lens, not a target."),
+     "stay in unsupervised phases; churn is a validation lens, not a target."),
 ]
 
 
@@ -304,13 +304,13 @@ def decisions_table():
 
 def action_table():
     rows_data = [
-        ("A — Suspected data error", "2", "0%",
+        ("A: Suspected data error", "2", "0%",
          "Ages 91–92: legal but implausible. Verify against source systems; exclude from decisions.",
          "gray"),
-        ("B — Rare but legitimate", "468", "4.1%",
-         "Settled elderly, zero-balance profiles, 4-product holders. Monitor only — churn is BELOW "
+        ("B: Rare but legitimate", "468", "4.1%",
+         "Settled elderly, zero-balance profiles, 4-product holders. Monitor only; churn is BELOW "
          "average. Do not waste retention budget here.", "amber"),
-        ("C — Risk signal", "406", "100%*",
+        ("C: Risk signal", "406", "100%*",
          "High-balance pre-churn, disengaged single-product, density outliers. Escalate to "
          "relationship managers; templates to monitor prospectively.", "red"),
     ]
@@ -341,7 +341,7 @@ def finding(num, title, body):
 
 
 # ===========================================================================
-# pipeline cards (Overview) — clickable, they ARE navigation
+# pipeline cards (Overview): clickable, they ARE navigation
 # ===========================================================================
 
 PIPELINE = [

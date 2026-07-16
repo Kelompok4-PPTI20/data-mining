@@ -38,15 +38,15 @@ interrupted, just run it again.
   distributions (retained vs churned, churn by dimension).
 - **Accessible to non-technical audience** — every card has a "what am I
   looking at" subtitle and a "What this tells us" conclusion; every page opens
-  with a phase header stating where you are in the KDD pipeline; the Knowledge
-  Report tab answers the central discovery question directly, covers the four
-  Mining Expo questions, and states limitations honestly.
+  with a clear header; the Knowledge Report retains the technical synthesis,
+  while the Business Takeaways page translates the full KDD result into a
+  plain-language priority list, testable actions, success measures and safeguards.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `app.py` | Dash app: shell, 6 pages, routing + interaction callbacks |
+| `app.py` | Dash app: shell, 7 pages, routing + interaction callbacks |
 | `figures.py` | All Plotly figures (built once at import) |
 | `components.py` | Design-system primitives: page headers, stat bands, cards, insight strips, callouts, personas, tables, pipeline cards |
 | `theme.py` | Palette tokens + shared Plotly template |

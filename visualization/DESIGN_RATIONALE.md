@@ -205,7 +205,8 @@ v1 was solid on tokens (good palette, type pairing, 8px grid) but weak on
 
 ## 4 · Functionality inventory (nothing lost)
 
-Six pages; feature-distribution explorer (6 features); churn-by-dimension
+Seven pages, including a non-technical Business Takeaways interpretation layer;
+feature-distribution explorer (6 features); churn-by-dimension
 explorer (7 dimensions); cluster-map algorithm × color switching (6 states);
 outlier-map color modes (2); rule interpretations (all 10, now row-click);
 decision log, action table, personas, Expo Q&A, limitations, reproducibility —
@@ -220,4 +221,5 @@ walking, scroll-to-top on page change, persistent dataset status.
   state over HTTP; algorithm-switch callback returns the DBSCAN figure.
 - Rubric check (§6 "Excellent", Presentation): interactive < 100ms unchanged
   (precomputed swaps), all required visualizations present, the central
-  discovery question is answered explicitly on the Overview and the Report.
+  discovery question is answered explicitly on the Overview, the Report and
+  the Business Takeaways page.
