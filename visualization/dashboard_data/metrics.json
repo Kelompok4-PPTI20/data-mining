@@ -5,12 +5,16 @@
   "churn_rate": 20.37,
   "n_churned": 2037,
   "n_clusters": 3,
-  "n_churn_rules": 17,
-  "n_rules_total": 645,
+  "n_churn_rules": 10,
+  "n_rules_generated": 45820,
+  "n_rules_confidence": 6458,
+  "n_rules_filtered": 613,
+  "n_nonredundant_churn_rules": 11,
+  "n_rules_total": 613,
   "top_rule_lift": 3.79,
   "top_rule_conf": 77.3,
   "n_flagged": 876,
-  "n_risk_signals": 406,
+  "n_risk_signals": 594,
   "dbscan_noise": 554,
   "dbscan_noise_churn": 62.6
  },
@@ -57,10 +61,10 @@
   },
   "Age_Band": {
    "labels": [
-    "Young adult (18-30)",
-    "Middle-aged (31-45)",
-    "Senior (46-60)",
-    "Elderly (60+)"
+    "Age 18-30",
+    "Age 31-45",
+    "Age 46-60",
+    "Age 61+"
    ],
    "churn_pct": [
     7.52,
@@ -128,8 +132,8 @@
   "Balance_Band": {
    "labels": [
     "Zero balance",
-    "Insured (0-100K)",
-    "Above ceiling (>100K)"
+    "Balance 0-100K",
+    "Balance above 100K"
    ],
    "churn_pct": [
     13.82,
@@ -197,14 +201,14 @@
   ],
   "mutual_info": [
    0.0,
-   0.0167,
-   0.0074,
-   0.0726,
-   0.003,
-   0.0084,
-   0.0679,
+   0.014,
+   0.0057,
+   0.0632,
+   0.0007,
+   0.0118,
+   0.07,
    0.0,
-   0.0125,
+   0.0123,
    0.0027
   ],
   "info_gain": [
@@ -231,7 +235,7 @@
  },
  "clusters": {
   "0": {
-   "name": "High-Balance Multi-Product Germany-Skew Mixed-Risk",
+   "name": "High-Balance Multi-Product Germany-Enriched Mixed-Risk",
    "n": 2169,
    "share": 21.7,
    "churn": 21.8,
@@ -253,7 +257,7 @@
    }
   },
   "1": {
-   "name": "High-Balance Single-Product France-Skew Watchlist",
+   "name": "High-Balance Single-Product Germany-Enriched Watchlist",
    "n": 4168,
    "share": 41.7,
    "churn": 25.6,
@@ -273,7 +277,7 @@
    }
   },
   "2": {
-   "name": "Zero-Balance Multi-Product France-Skew Loyalist",
+   "name": "Zero-Balance Multi-Product Spain-Enriched Loyalist",
    "n": 3663,
    "share": 36.6,
    "churn": 13.6,
@@ -551,9 +555,9 @@
   {
    "method": "Robust Mahalanobis (chi2 99.9%)",
    "family": "Multivariate",
-   "flagged": 142,
-   "pct": 1.42,
-   "churn_pct": 58.5
+   "flagged": 117,
+   "pct": 1.17,
+   "churn_pct": 65.8
   },
   {
    "method": "Local Outlier Factor (k=20)",
@@ -602,60 +606,54 @@
   ],
   "n": [
    9046,
-   174,
-   200,
+   175,
+   199,
    580
   ],
   "churn_pct": [
    18.6,
-   24.7,
-   22.5,
+   24.6,
+   22.6,
    45.3
   ],
   "mv_only_hidden": 522,
   "mv_only_hidden_pct": 90.0,
-  "jaccard": 0.21,
-  "kappa": 0.312
+  "jaccard": 0.209,
+  "kappa": 0.31
  },
  "anomaly_classes": [
   {
-   "cls": "B: Rare Valid \u2014 Statistically Unusual Pattern",
-   "n": 457,
-   "pct_of_flagged": 52.2,
-   "churn_pct": 4.2
+   "cls": "C: Risk Signal \u2014 IF + DBSCAN Consensus",
+   "n": 334,
+   "pct_of_flagged": 38.1,
+   "churn_pct": 60.8
   },
   {
-   "cls": "C: Risk Signal \u2014 Density Outlier + Churned",
-   "n": 221,
-   "pct_of_flagged": 25.2,
-   "churn_pct": 100.0
+   "cls": "B: Rare Legitimate \u2014 Statistical/Isolation Outlier",
+   "n": 273,
+   "pct_of_flagged": 31.2,
+   "churn_pct": 16.5
   },
   {
-   "cls": "C: Risk Signal \u2014 High-Balance Pre-Churn",
-   "n": 136,
-   "pct_of_flagged": 15.5,
-   "churn_pct": 100.0
+   "cls": "C: Risk Signal \u2014 DBSCAN Density Outlier",
+   "n": 218,
+   "pct_of_flagged": 24.9,
+   "churn_pct": 66.1
   },
   {
-   "cls": "C: Risk Signal \u2014 Disengaged Single-Product Churn",
-   "n": 44,
-   "pct_of_flagged": 5.0,
-   "churn_pct": 100.0
+   "cls": "C: Risk Signal \u2014 ARM Profile Overlap",
+   "n": 42,
+   "pct_of_flagged": 4.8,
+   "churn_pct": 76.2
   },
   {
-   "cls": "B: Rare Valid \u2014 Young High-Balance Customer",
-   "n": 11,
-   "pct_of_flagged": 1.3,
-   "churn_pct": 0.0
+   "cls": "B: Rare Legitimate \u2014 Young High-Balance Customer",
+   "n": 7,
+   "pct_of_flagged": 0.8,
+   "churn_pct": 14.3
   },
   {
-   "cls": "C: Risk Signal \u2014 Senior High-Value Departure",
-   "n": 5,
-   "pct_of_flagged": 0.6,
-   "churn_pct": 100.0
-  },
-  {
-   "cls": "A: Data Error",
+   "cls": "B: Rare Legitimate \u2014 Source Verification Recommended",
    "n": 2,
    "pct_of_flagged": 0.2,
    "churn_pct": 0.0

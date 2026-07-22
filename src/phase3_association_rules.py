@@ -2,6 +2,7 @@
 
 import warnings
 
+import numpy as np
 import pandas as pd
 from mlxtend.frequent_patterns import apriori, association_rules
 
@@ -45,8 +46,8 @@ def run_phase3():
     # **Algorithm:** Apriori (mlxtend)  
     # **Dataset:** Path B transaction matrix (`churn_ohe_transactions.csv`)  
     # **Filter Criteria:** Minimum support = 0.03, confidence >= 0.50, lift >= 1.5  
-    # **Rationale:** A 0.05 support floor produced too few churn-consequent rules for the rubric. The 0.03 floor still represents about 300 customers in this 10,000-record dataset and produced 17 churn-consequent rules, passing the required 10-rule threshold.
-    # **Balance items:** binned on the EUR 100,000 EU deposit-guarantee ceiling (Directive 2014/49/EU) — see the Binning Revision note in Phase 1 for the anchor table and the effect of this revision on the rule set.  
+    # **Rationale:** The 0.03 support floor still represents about 300 customers in this 10,000-record dataset. Exact single-item churn consequents are then checked for proper-parent confidence gain so the final table contains at least 10 non-redundant discoveries.
+    # **Balance items:** zero, (0–100K], and >100K in dataset units. The source documents neither currency nor insurance status, so 100K is an analytical scenario boundary rather than a regulatory claim.
     # **Deliverable:** At least 10 non-trivial, high-lift association rules with business interpretation
     # 
 
@@ -128,74 +129,138 @@ def run_phase3():
 
     # ── Rule Generation ───────────────────────────────────────────────────
     MIN_CONFIDENCE = 0.50
-    MIN_LIFT       = 1.5
+    MIN_LIFT = 1.50
+    MIN_INCREMENTAL_CONFIDENCE = 0.01
 
-    rules = association_rules(
+    # Generate the complete rule universe first. Each filter is counted
+    # separately so generated and retained rules are not conflated.
+    rules_raw = association_rules(
         frequent_itemsets,
         metric='confidence',
-        min_threshold=MIN_CONFIDENCE
+        min_threshold=0.0,
     )
+    rules_confidence = rules_raw[
+        rules_raw['confidence'] >= MIN_CONFIDENCE
+    ].copy()
+    rules = rules_confidence[rules_confidence['lift'] >= MIN_LIFT].copy()
 
-    # ── Apply Lift Filter ────────────────────────────────────────────────
-    rules = rules[rules['lift'] >= MIN_LIFT].copy()
+    for frame in (rules_raw, rules_confidence, rules):
+        frame['antecedent_len'] = frame['antecedents'].apply(len)
+        frame['consequent_len'] = frame['consequents'].apply(len)
+
+    rules['conviction'] = (
+        (1 - rules['consequent support'])
+        / (1 - rules['confidence'] + 1e-9)
+    )
     rules = rules.sort_values('lift', ascending=False).reset_index(drop=True)
 
-    # ── Add derived metrics ────────────────────────────────────────────
-    rules['conviction']     = (1 - rules['consequent support']) / (1 - rules['confidence'] + 1e-9)
-    rules['antecedent_len'] = rules['antecedents'].apply(len)
-    rules['consequent_len'] = rules['consequents'].apply(len)
+    def excludes_retained_and_tautology(frame):
+        """Remove retained-outcome leakage and churn in the antecedent."""
+        return frame[
+            ~frame['antecedents'].apply(
+                lambda items: 'Churn_Status_Retained' in items
+            )
+            & ~frame['consequents'].apply(
+                lambda items: 'Churn_Status_Retained' in items
+            )
+            & ~frame['antecedents'].apply(
+                lambda items: 'Churn_Status_Churned' in items
+            )
+        ].copy()
 
-    # ── Filter for Churn-Focused Rules ───────────────────────────────────────
-    # Defensive guard: even though we dropped Churn_Status_Retained from the
-    # transaction matrix, re-filter here so re-runs against an older matrix can't
-    # silently reintroduce the leakage.
-    rules = rules[
-        ~rules['antecedents'].apply(lambda x: 'Churn_Status_Retained' in x) &
-        ~rules['consequents'].apply(lambda x: 'Churn_Status_Retained' in x)
-    ].copy()
-
+    rules = excludes_retained_and_tautology(rules)
     churn_rules = rules[
-        rules['consequents'].apply(lambda x: 'Churn_Status_Churned' in x)
+        rules['consequents'].apply(
+            lambda items: 'Churn_Status_Churned' in items
+        )
     ].copy()
-
-    # Drop rules whose antecedent ALSO contains Churned (would be tautological)
-    churn_rules = churn_rules[
-        ~churn_rules['antecedents'].apply(lambda x: 'Churn_Status_Churned' in x)
+    churn_single_rules = churn_rules[
+        churn_rules['consequents'] == frozenset({'Churn_Status_Churned'})
     ].copy()
-
     non_churn_rules = rules[
-        ~rules['consequents'].apply(lambda x: 'Churn_Status_Churned' in x)
+        ~rules['consequents'].apply(
+            lambda items: 'Churn_Status_Churned' in items
+        )
     ].copy()
 
-    print(f"── Rule Mining Summary ──")
-    print(f"  Total rules generated:             {len(rules):,}")
-    print(f"  Rules with CHURN as consequent:    {len(churn_rules):,}")
-    print(f"  Other high-lift rules:             {len(non_churn_rules):,}")
-    print(f"\n  PDF Phase 3 requires >=10 non-trivial churn-consequent rules.")
-    print(f"  Status: {'PASS' if len(churn_rules) >= 10 else 'FAIL'} ({len(churn_rules)}/10)")
+    # Compare each candidate with the strongest proper-subset churn rule from
+    # the full supported rule universe. Extensions that add no material
+    # confidence are excluded from the ten-rule deliverable.
+    raw_churn_single = excludes_retained_and_tautology(rules_raw)
+    raw_churn_single = raw_churn_single[
+        raw_churn_single['consequents']
+        == frozenset({'Churn_Status_Churned'})
+    ].copy()
 
-    print(f"\n── Top 15 Churn-Predicting Rules (by Lift) ──")
-    display(churn_rules.head(15)[
-        ['antecedents','consequents','support','confidence','lift','conviction']
-    ].rename(columns={
-        'antecedents':'IF (Antecedent)',
-        'consequents':'THEN (Consequent)',
-        'support':'Support',
-        'confidence':'Confidence',
-        'lift':'Lift',
-        'conviction':'Conviction'
-    }))
+    def best_parent_confidence(antecedent):
+        parent_rows = raw_churn_single[
+            raw_churn_single['antecedents'].apply(
+                lambda parent: parent < antecedent
+            )
+        ]
+        return (
+            float(parent_rows['confidence'].max())
+            if len(parent_rows)
+            else np.nan
+        )
+
+    churn_single_rules['Best_Parent_Confidence'] = (
+        churn_single_rules['antecedents'].apply(best_parent_confidence)
+    )
+    churn_single_rules['Incremental_Confidence'] = (
+        churn_single_rules['confidence']
+        - churn_single_rules['Best_Parent_Confidence']
+    )
+    nonredundant_churn_rules = churn_single_rules[
+        churn_single_rules['Best_Parent_Confidence'].isna()
+        | (
+            churn_single_rules['Incremental_Confidence']
+            >= MIN_INCREMENTAL_CONFIDENCE
+        )
+    ].sort_values('lift', ascending=False).reset_index(drop=True)
+
+    rule_funnel = pd.DataFrame(
+        [
+            ('All rules from supported itemsets', len(rules_raw)),
+            (f'Confidence >= {MIN_CONFIDENCE:.2f}', len(rules_confidence)),
+            (f'Lift >= {MIN_LIFT:.2f}', len(rules)),
+            ('Churn in consequent (including multi-item)', len(churn_rules)),
+            ('Single churn consequent', len(churn_single_rules)),
+            (
+                'Non-redundant: confidence gain >= '
+                f'{MIN_INCREMENTAL_CONFIDENCE:.0%} or no parent',
+                len(nonredundant_churn_rules),
+            ),
+        ],
+        columns=['Funnel Stage', 'Rules'],
+    )
+
+    print('── Rule Filtering Funnel ──')
+    display(rule_funnel)
+    print(
+        f"Rubric status: "
+        f"{'PASS' if len(nonredundant_churn_rules) >= 10 else 'FAIL'} "
+        f"({len(nonredundant_churn_rules)}/10 non-redundant churn rules available)"
+    )
+    print('\n── Highest-lift non-redundant churn associations ──')
+    display(
+        nonredundant_churn_rules.head(15)[
+            [
+                'antecedents', 'support', 'confidence', 'lift',
+                'Incremental_Confidence',
+            ]
+        ]
+    )
 
 
-    # ### Interpretation — 645 Rules Survive the Filters, but Only 17 Concern Churn. Why So Few?
+    # ### Interpretation — A transparent funnel produces the final 10 documented rules
     # 
-    # - **The confidence bar is intentionally punishing for churn rules.** With a 20.4% base rate, confidence ≥ 0.50 forces any churn-consequent rule to carry **lift ≥ 2.45** — the antecedent must more than double churn likelihood before entering the table. Most attribute combinations cannot do that. Seventeen can, and every one of them therefore describes a genuinely elevated-risk profile rather than a base-rate echo.
-    # - **The other 628 rules are mostly structural:** co-occurrences between demographic/financial bands (geography ↔ balance bands, age ↔ tenure, etc.). They clear lift 1.5 but their consequents are attributes, not the behavior of interest; they are retained in the saved file for transparency and excluded from the deliverable table.
-    # - **No churn rule is a micro-segment fluke:** the support floor of 0.03 means the weakest qualifying rule still describes 313 real customers (antecedent ∩ churned), and the strongest (senior-only) describes 842.
-    # 
-    # - **Binning sensitivity, demonstrated:** under the original unanchored 50K/125K balance bands this count was 13 — the Mid band supported a single rule and the Low band (0.75% support) none. The DGS-anchored bands are frequent enough (Insured 15.8%, Above-ceiling 48.0%) to interact with Senior and Inactive, adding five interpretable balance rules, including the #2 rule overall. Bin boundaries determine which patterns are representable.
-    # 
-    # **Conclusion:** the small number of churn rules is not a shortage — it is the filter working. Ten-plus rules at ≥2.5× lift with three-digit customer counts is the profile of a defensible rule set; hundreds of "churn rules" would have meant thresholds too loose to mean anything.
+    # - **The confidence bar is intentionally demanding for churn rules.** With a 20.4% base rate, confidence ≥ 0.50 forces any churn-consequent rule to carry lift of roughly 2.45 or more.
+    # - **The funnel is explicit:** 45,820 raw rules → 6,458 after confidence → 613 after lift/leakage filtering → 16 exact single-item churn consequents → 11 non-redundant rules → 10 documented findings.
+    # - **No documented rule is a micro-segment fluke:** the support floor of 0.03 means every antecedent/consequent intersection represents at least about 300 records.
+    # - **Non-redundancy is measurable:** a longer rule must improve confidence over its strongest proper parent by at least one percentage point, unless no qualifying parent exists.
+    #
+    # **Conclusion:** the short final table is the result of support, confidence, lift, leakage, consequent-shape, and redundancy screens—not a shortage of generated associations.
     # 
 
     # In[29]:
@@ -255,100 +320,106 @@ def run_phase3():
     # In[30]:
 
 
-    # ── Top 10 Rules — Formatted Deliverable ──────────────────────────────
-    # Deliverable table: single-consequent rules only. A multi-item consequent like
-    # {Churned, Products_1} duplicates the information of its single-consequent
-    # parent rule and would waste one of the 10 table slots on redundancy.
-    top_rules = churn_rules[churn_rules['consequent_len'] == 1].nlargest(10, 'lift')[
-        ['antecedents','consequents','support','confidence','lift','conviction']
+    # ── Top 10 non-redundant churn rules with action commentary ──────────
+    top_rules = nonredundant_churn_rules.nlargest(10, 'lift')[
+        [
+            'antecedents', 'consequents', 'support', 'confidence', 'lift',
+            'conviction', 'Incremental_Confidence',
+        ]
     ].reset_index(drop=True)
 
-    # Human-readable formatting
-    top_rules['IF (Conditions)']     = top_rules['antecedents'].apply(
-        lambda x: ' ∩ '.join(sorted(x)))
-    top_rules['THEN (Outcome)']      = top_rules['consequents'].apply(
-        lambda x: ' ∩ '.join(sorted(x)))
-    top_rules['Support (%)']         = (top_rules['support'] * 100).round(2)
-    top_rules['Confidence (%)']      = (top_rules['confidence'] * 100).round(1)
-    top_rules['Lift']                = top_rules['lift'].round(3)
-    top_rules['Conviction']          = top_rules['conviction'].round(3)
+    def readable_item(item):
+        return (
+            item.replace('Age_Band_Age_', 'Age ')
+            .replace('_to_', '–')
+            .replace('Balance_Band_Balance_', 'Balance ')
+            .replace('Active_Status_', '')
+            .replace('Products_Label_Products_', 'Products=')
+            .replace('Geography_', '')
+            .replace('Gender_', '')
+            .replace('CrCard_Status_', '')
+            .replace('_', ' ')
+        )
 
-    display_cols = ['IF (Conditions)', 'THEN (Outcome)',
-                    'Support (%)', 'Confidence (%)', 'Lift', 'Conviction']
+    def business_commentary(antecedent):
+        items = set(antecedent)
+        descriptors = []
+        actions = []
+        if 'Age_Band_Age_46_to_60' in items:
+            descriptors.append("the dataset's age 46–60 band")
+        if 'Active_Status_Inactive' in items:
+            descriptors.append('inactive customers')
+            actions.append('test a re-engagement contact')
+        if 'Products_Label_Products_1' in items:
+            descriptors.append('single-product relationships')
+            actions.append('test a relevant second-product offer')
+        if 'Geography_Germany' in items:
+            descriptors.append('the German book')
+            actions.append('audit local service and product-fit drivers')
+        if 'Gender_Female' in items:
+            descriptors.append('female customers')
+            actions.append(
+                'investigate experience differences with fairness safeguards'
+            )
+        if 'Balance_Band_Balance_Above_100K' in items:
+            descriptors.append('balances above the 100K scenario cut')
+            actions.append(
+                'prioritize relationship-manager review while '
+                'sensitivity-testing the threshold'
+            )
+        if 'CrCard_Status_Has_CrCard' in items:
+            descriptors.append('card holders')
+        profile_text = (
+            ', '.join(descriptors) if descriptors else 'this measured profile'
+        )
+        action_text = (
+            '; '.join(dict.fromkeys(actions))
+            or 'validate the segment in a later period before action'
+        )
+        return (
+            f'Association concentrates among {profile_text}. Next step: '
+            f'{action_text}; do not treat the rule as causal.'
+        )
 
-    print("── TOP 10 ASSOCIATION RULES — CHURN PROFILE DISCOVERY ──")
+    top_rules['IF (Conditions)'] = top_rules['antecedents'].apply(
+        lambda items: ' ∩ '.join(sorted(readable_item(item) for item in items))
+    )
+    top_rules['THEN (Outcome)'] = 'Churned'
+    top_rules['Support (%)'] = (top_rules['support'] * 100).round(2)
+    top_rules['Confidence (%)'] = (top_rules['confidence'] * 100).round(1)
+    top_rules['Lift'] = top_rules['lift'].round(3)
+    top_rules['Conviction'] = top_rules['conviction'].round(3)
+    top_rules['Confidence gain vs best parent (pp)'] = (
+        top_rules['Incremental_Confidence'] * 100
+    ).round(1)
+    top_rules['Business Commentary'] = top_rules['antecedents'].apply(
+        business_commentary
+    )
+
+    display_cols = [
+        'IF (Conditions)', 'THEN (Outcome)', 'Support (%)', 'Confidence (%)',
+        'Lift', 'Confidence gain vs best parent (pp)', 'Business Commentary',
+    ]
+    print('── TOP 10 ASSOCIATION RULES — NON-REDUNDANT CHURN PROFILE DISCOVERY ──')
     display(top_rules[display_cols])
 
-    # Save rules
-    top_rules.to_csv(TOP_RULES_PATH, index=False)
+    top_rule_export_cols = [
+        'antecedents', 'consequents', 'support', 'confidence',
+        'IF (Conditions)', 'THEN (Outcome)', 'Support (%)', 'Confidence (%)',
+        'Lift', 'Conviction', 'Confidence gain vs best parent (pp)',
+        'Business Commentary',
+    ]
+    top_rules[top_rule_export_cols].to_csv(TOP_RULES_PATH, index=False)
     rules.to_csv(ALL_RULES_PATH, index=False)
-    print(f"\n  ✔ Rules saved to outputs/")
 
-    print("""
-    ── BUSINESS INTERPRETATION (Mining Expo Question 1: surprising rules) ──
-
-    The Senior age band (ages 46–60) remains the dominant antecedent, and with
-    the DGS-anchored balance bands a second risk vector becomes visible:
-    balances above the EUR 100,000 deposit-guarantee ceiling (Dir. 2014/49/EU).
-
-    Rule A: {Inactive ∩ Senior ∩ Products_1} → {Churned}     Lift≈3.8 Conf≈77%
-      Inactive seniors holding only one product churn at ~77% — nearly 4× the
-      20.4% base rate. Intervention: proactive retention call before a second
-      consecutive inactive quarter; bundled-product offer.
-
-    Rule B: {Inactive ∩ Senior ∩ Above_DGS} → {Churned}      Lift≈3.6 Conf≈73%
-      NEW under the regulatory binning: inactive seniors whose balance exceeds
-      the EUR 100K insured ceiling churn at 72.6%. Money above the state
-      guarantee is the most mobile money in the book — one better competitor
-      offer moves it. Highest-priority relationship-manager list.
-
-    Rule C: {Inactive ∩ Senior} → {Churned}                  Lift≈3.4 Conf≈68%
-      Inactivity alone is far weaker — it is the AGE interaction that drives
-      the risk. Seniors disengage permanently; younger inactives re-engage.
-
-    Rule D: {Inactive ∩ Senior ∩ CrCard} → {Churned}         Lift≈3.3 Conf≈68%
-      A credit card does not protect inactive seniors at all — risk is
-      essentially identical to the card-free profile (Rule C).
-
-    Rule E: {Senior ∩ Germany} → {Churned}                   Lift≈3.3 Conf≈67%
-      German seniors churn at >3× baseline regardless of activity or product
-      count — a geographic product-fit or service-quality issue specific to
-      the German operation.
-
-    Rule F: {Senior ∩ Female ∩ Products_1} → {Churned}       Lift≈3.3 Conf≈67%
-      Female seniors with a single product — a gender × age interaction that
-      simple cross-tabs would miss.
-
-    Rule G: {Senior ∩ Products_1} → {Churned}                Lift≈3.0 Conf≈61%
-      Single-product seniors at 61% — cross-sell is the obvious lever, and the
-      data shows the bank has historically failed to deepen this segment.
-
-    Rule H: {Senior ∩ CrCard ∩ Products_1} → {Churned}       Lift≈2.9 Conf≈60%
-      Card-only relationships are shallow relationships (compare Rule G — the
-      card adds nothing).
-
-    Rule I: {Senior ∩ Above_DGS ∩ Products_1} → {Churned}    Lift≈2.9 Conf≈60%
-      Single-product seniors above the insured ceiling — high-value, shallow-
-      anchored, uninsured excess: the costliest churn profile per customer.
-
-    Rule J: {Senior ∩ Above_DGS} → {Churned}                 Lift≈2.8 Conf≈58%
-      Even unconditionally, seniors above the EUR 100K ceiling churn at ~3×
-      baseline. Under the old arbitrary 50–125K binning this pattern was split
-      across two bands and misread as "the bank retains the wealthy" — the
-      regulatory boundary reverses that conclusion.
-
-    Beyond the table: the assigned hypothesis {Germany ∩ Inactive ∩ Products_1}
-    holds at Lift 2.56 / Conf 52.1% (verified above), and its above-ceiling
-    extension {+ Above_DGS} raises confidence to 55.7% (Lift 2.74) — uninsured
-    balance adds risk on top of the German-engagement profile.
-
-    ── KEY TAKEAWAY ──
-    The bank is hemorrhaging SENIORS with shallow product engagement, and the
-    losses concentrate where they hurt most: accounts holding MORE than the
-    EUR 100K deposit-guarantee ceiling. Age, German geography, and uninsured
-    excess balance are three separately visible risk vectors that compound
-    when combined. None of this is visible on a univariate dashboard.
-    """)
+    print(
+        f'''\nKEY DISCOVERY
+The strongest retained association has lift {top_rules.loc[0, 'Lift']:.3f} and
+confidence {top_rules.loc[0, 'Confidence (%)']:.1f}%. Its value is the
+interaction among conditions, not any single field in isolation. All ten rows
+remain descriptive hypotheses for validation and controlled testing, not a
+churn-prediction score.'''
+    )
 
 
 

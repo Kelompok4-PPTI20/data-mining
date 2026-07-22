@@ -28,6 +28,11 @@ from data import BASELINE, M, R
 card, insight, callout, chip, section, stat = (
     C.card, C.insight, C.callout, C.chip, C.section, C.stat)
 
+CLASS_COUNTS = {
+    prefix: sum(row["n"] for row in M["anomaly_classes"] if row["cls"].startswith(prefix))
+    for prefix in ("A", "B", "C")
+}
+
 app = Dash(
     __name__,
     suppress_callback_exceptions=True,
@@ -66,13 +71,13 @@ overview = html.Div([
                 "from the raw data?", className="hero-q"),
         html.P([
             "That churn risk in this bank is ", html.B("relational, not marginal"),
-            ": no single column predicts leaving (max |r| = 0.29), but specific "
-            "combinations of ordinary values multiply risk up to 4× the 20.4% "
+            ": no single linear feature association exceeds |r| = 0.29, but specific "
+            "combinations of ordinary values are associated with up to 4× the 20.4% "
             "baseline. The four discoveries below are that hidden knowledge; "
             "each one invisible to a column-at-a-time report.",
         ], className="hero-a"),
         html.Div([
-            C.herostat("77%", "churn · inactive single-product seniors"),
+            C.herostat("77%", "churn · inactive, one product, age 46–60"),
             C.herostat("2×", "Germany vs France & Spain"),
             C.herostat("7.6%", "churn floor at exactly two products"),
             C.herostat("45%", "churn among combination-anomalies"),
@@ -84,27 +89,29 @@ overview = html.Div([
         stat(f"{BASELINE:.1f}%", "Baseline churn", "2,037 left; the yardstick for every "
              "number here", tone=T.CRITICAL, primary=True),
         stat("3", "Customer personas", "found by clustering, method-stable (ARI 0.75)"),
-        stat(f"{M['kpi']['n_churn_rules']}", "High-lift churn rules",
-             "all ≥ 2.5× baseline risk · top rule 3.79×"),
-        stat("876", "Anomalies triaged", "406 risk signals · 468 rare-but-valid · 2 data errors"),
+        stat(f"{M['kpi']['n_churn_rules']}", "Documented churn rules",
+             "non-redundant · all ≥ 2.5× baseline · top rule 3.79×"),
+        stat("876", "Anomalies triaged",
+             f"{CLASS_COUNTS['C']} risk signals · {CLASS_COUNTS['B']} rare-valid · "
+             f"{CLASS_COUNTS['A']} data errors"),
     ]),
 
     section("The four discoveries", meta="none visible in a one-column report"),
     html.Div([
-        card("01 · Churn compounds along the senior path",
+        card("01 · Churn compounds along the age-and-engagement path",
              "Churn rate as conditions stack (each bar adds one condition)",
              C.graph(F.OV_SENIOR),
-             insight(["Age is the strongest single signal (seniors churn at 51%), but the "
+             insight(["Age is the strongest single signal (ages 46–60 churn at 51%), but the "
                       "knowledge is the ", html.B("interaction"), ": inactivity roughly "
-                      "doubles a senior's risk, and a single product pushes it to ",
+                      "compounds that age-band association, and a single product pushes it to ",
                       html.B("77%, or 3.8× baseline"), "."])),
         card("02 · Germany churns at double the rate",
              "Churn rate by country: Germany loses 814 of 2,509 customers",
              C.graph(F.OV_GEO),
-             insight(["The gap survives every control: even restricted to inactive "
-                      "single-product customers, Germany still churns at 52.1% (lift 2.56×). "
-                      "This points to a ", html.B("structural problem in the German operation"),
-                      ", not an unlucky customer mix."], kind="bad")),
+             insight(["The association persists in the tested inactive, single-product "
+                      "subgroup: Germany churns at 52.1% (lift 2.56×). This merits a ",
+                      html.B("Germany-specific service and product-fit investigation"),
+                      "; it does not establish a causal country effect."], kind="bad")),
         card("03 · Products follow a U-curve, not a line",
              "Churn rate by number of products held",
              C.graph(F.OV_PROD),
@@ -308,13 +315,13 @@ phase3 = html.Div([
 
     # the assigned hypothesis; a status banner, not a second dark hero
     html.Div([
-        html.Div("ASSIGNED HYPOTHESIS: CONFIRMED", className="banner-kicker"),
+        html.Div("ASSIGNED HYPOTHESIS: SUPPORTED IN THIS SNAPSHOT", className="banner-kicker"),
         html.H2("“Customers from Germany holding only one product who are inactive "
                 "represent a strong churn profile.”", className="banner-title"),
         html.P(f"{hyp['antecedent_n']} customers match the profile and {hyp['churned_n']} of "
                "them churned; verified by direct computation on the raw data. The German "
-               "retention problem is real, and Phase 3 shows it is one of TWO independent "
-               "risk vectors (the other: senior age) that compound when combined.",
+               "association merits investigation, and Phase 3 shows it alongside a second "
+               "recurring profile involving the age 46–60 band.",
                className="banner-body"),
         html.Div([
             C.herostat(f"{hyp['confidence_pct']}%", "confidence (vs 20.4% baseline)"),
@@ -325,20 +332,22 @@ phase3 = html.Div([
     ], className="banner banner--success"),
 
     C.statband([
-        stat("4,105", "Frequent itemsets", "Apriori, min support 3% (≥ ~300 customers)"),
-        stat("645", "Rules pass filters", "confidence ≥ 50% and lift ≥ 1.5"),
-        stat("17", "Churn-consequent rules", "the rubric needs 10; every one ≥ 2.5× baseline"),
-        stat("3.79×", "Strongest lift", "inactive senior, 1 product → 77.3% churn",
+        stat(f"{M['kpi']['n_rules_generated']:,}", "Rules generated",
+             "complete rule universe from supported itemsets"),
+        stat(f"{M['kpi']['n_rules_filtered']:,}", "Rules pass filters",
+             "confidence ≥ 50%, lift ≥ 1.5, leakage guards"),
+        stat(f"{M['kpi']['n_nonredundant_churn_rules']}", "Non-redundant churn rules",
+             "10 documented; each adds ≥1pp confidence or has no parent"),
+        stat("3.79×", "Strongest lift", "inactive, age 46–60, 1 product → 77.3% churn",
              tone=T.CRITICAL, primary=True),
     ]),
 
     callout(["With a 20.4% base rate, demanding confidence ≥ 50% mathematically forces lift "
              "≥ 2.45, so ", html.B("every rule that survived more than doubles churn risk"),
-             ". Only 17 of 645 rules concern churn: that is the filter working, not a "
-             "shortage. The other 628 are structural co-occurrences (geography ↔ balance "
-             "bands etc.), kept in the saved file for transparency. Re-binning balance on "
-             "the EUR 100K deposit-guarantee ceiling (Directive 2014/49/EU) raised the churn-"
-             "rule count from 13 to 17; five rules now involve above-ceiling balances."],
+             ". The transparent funnel separates 45,820 generated rules from 613 passing "
+             "confidence/lift/leakage guards, 16 single-churn-consequent candidates, and 11 "
+             "non-redundant churn rules. The 100K balance band is a currency-neutral scenario "
+             "cut because the source does not document currency or insurance status."],
             title="Why so few rules survive"),
 
     section("The rule network", meta="how the top-10 rules share attributes"),
@@ -348,9 +357,9 @@ phase3 = html.Div([
              "rules A–J (redder = higher lift; hover for details). Every rule points to churn.",
              C.graph(F.RULE_NETWORK_FIG),
              insight(["One attribute sits at the heart of almost every rule: ", html.B(
-                 "Senior (46–60)"), ". Churn risk compounds when senior age meets inactivity, "
+                 "Age 46–60"), ". Churn risk compounds when that age band meets inactivity, "
                  "single-product holdings, female gender, German geography or a balance above "
-                 "the EUR 100K deposit-guarantee ceiling. The bank is not "
+                 "the 100K scenario threshold. The bank is not "
                  "losing customers at random; it is losing ", html.B(
                      "a specific, describable population"), "."])),
         card("Rule quality at a glance",
@@ -402,12 +411,14 @@ phase4 = html.Div([
     C.statband([
         stat("876", "Customers flagged", "by ≥ 1 of the 4 core methods (8.8% of book)",
              primary=True),
-        stat("406", "Risk signals (C)", "churn-linked patterns → escalate to retention",
+        stat(f"{CLASS_COUNTS['C']}", "Risk signals (C)",
+             "structural/ARM evidence → human review and treatment testing",
              tone=T.CRITICAL),
-        stat("468", "Rare but valid (B)", "churn just 4.1%; SAFER than average; do not delete",
+        stat(f"{CLASS_COUNTS['B']}", "Rare but valid (B)",
+             "plausible unusual records; retain and monitor",
              tone=T.WARNING),
-        stat("2", "Suspected data errors (A)", "ages 91–92; manual review, nothing depends "
-             "on them"),
+        stat(f"{CLASS_COUNTS['A']}", "Data errors (A)",
+             "none violate the documented domain rules"),
         stat("336", "IF ∩ DBSCAN overlap", "two structural methods agreeing · κ = 0.617"),
     ]),
 
@@ -418,7 +429,7 @@ phase4 = html.Div([
          "time). Note IF/LOF fix their count at 5% by construction; IQR/Z discover theirs.",
          C.graph(F.METHOD_FIG),
          insight(["A clean split: the structural, whole-profile methods (DBSCAN 62.6%, "
-                  "Mahalanobis 58.5%, Isolation Forest 49.0%) flag churn-dense customers, "
+                  "Mahalanobis 65.8%, Isolation Forest 49.0%) flag churn-dense customers, "
                   "while single-value screens flag benign extremes (IQR 23.5%, Z-score "
                   "13.5%; ", html.B("below baseline"), "). Different methods answer "
                   "different questions; for churn risk, trust the structural family."])),
@@ -456,11 +467,11 @@ phase4 = html.Div([
              {"label": "Anomaly class (triage)", "value": "class"},
              {"label": "Churn status", "value": "churn"}], "class"))], className="controls"),
           dcc.Graph(id="ph4-scatter", config=T.GRAPH_CONFIG, style={"height": "430px"})],
-         insight(["The most anomalous region (bottom) is dominated by red risk-signal cases "
-                  "at BOTH ends of the balance axis: high-balance pre-churn departures on "
-                  "the right (592 churners averaging £149.8K; 46% German), and unusual "
-                  "zero-balance profiles on the left. Amber rare-valid cases sit just below "
-                  "the threshold; unusual, but safe."])),
+         insight(["The map separates the evidence-based classes without using `Exited` to "
+                  "define them. The separate retrospective subset contains 592 exited "
+                  "customers above the dataset's 75th-percentile balance (mean about 149.8K "
+                  "balance units), but this snapshot cannot establish a pre-churn drop. "
+                  "Hover a point to inspect the structural evidence."])),
 
     section("Classification & action", meta="the anomaly typology, applied to all 876 records"),
     html.Div([
@@ -473,11 +484,10 @@ phase4 = html.Div([
     ], className="grid g2-narrow"),
     card("Recommended actions per class", None,
          [C.action_table(),
-          html.Div("* Class C churn = 100% by construction: the typology uses the observed "
-                   "churn label retrospectively as supporting evidence, as the brief "
-                   "prescribes. Deployed prospectively, expect the Phase-3/4 lift levels "
-                   "(≈2.5–3.8×), never 100%; this figure must not be quoted as model "
-                   "performance.", className="footnote")]),
+          html.Div("Class assignment excludes Exited. Class churn rates are post-hoc "
+                   "validation lenses, not anomaly ground truth or predictive accuracy. "
+                   "The ARM-overlap subtype also requires out-of-time validation.",
+                   className="footnote")]),
 
     section("Cross-reference with Phase 2", meta="explicitly graded"),
     html.Div([
@@ -517,32 +527,33 @@ report = html.Div([
         html.P([
             "Raw-data inspection shows a 20% churn rate and mild demographic tilts. Mining "
             "the same 10,000 customers end-to-end revealed four pieces of knowledge, none "
-            "visible in a univariate report: (1) a compounding ", html.B("senior × engagement "
+            "visible in a univariate report: (1) a compounding ", html.B("age 46–60 × engagement "
             "interaction"), " that escalates from 51% to 77% churn as conditions stack; "
-            "(2) a ", html.B("structural German retention problem"), " that doubles churn "
-            "independently of customer mix; (3) a customer book organized by ",
+            "(2) a ", html.B("Germany-associated retention gap"), " that persists in the "
+            "tested inactive, single-product subgroup; (3) a customer book organized by ",
             html.B("balance × product depth"), "; whose largest segment (41.7%) keeps "
             "six-figure balances anchored by only one product, and (4) the fact that ",
-            html.B("unusual combinations of normal values"), " predict churn (45.3%) far "
-            "better than extreme single values (24.7%). The value of this project is the "
+            html.B("unusual combinations of normal values"), " are more churn-aligned (45.3%) "
+            "than extreme single values (24.7%). The value of this project is the "
             "interpretation of these hidden profiles; not prediction accuracy.",
         ], className="hero-a"),
     ], className="hero"),
 
     section("Findings & recommended actions"),
     card(None, None, [
-        C.finding("1", "The bank is hemorrhaging seniors with shallow product engagement",
-                  "Senior (46–60) is the dominant antecedent in every top rule. Inactive "
-                  "single-product seniors churn at 77.3% (lift 3.79×, 405 customers). Action: "
+        C.finding("1", "The strongest association combines age 46–60 with shallow engagement",
+                  "The explicit age 46–60 band is the dominant antecedent in the top rules. "
+                  "Inactive single-product customers in this band churn at 77.3% "
+                  "(lift 3.79×, 405 customers). Action: "
                   "retention call before a second consecutive inactive quarter; bundled second "
-                  "product; senior-specific engagement program."),
-        C.finding("2", "Germany has a structural retention problem",
+                  "product; age-appropriate engagement test."),
+        C.finding("2", "Germany has a retention gap that merits targeted investigation",
                   "32.4% churn vs ~16% elsewhere; 46% of high-balance churners are German; "
-                  "German seniors churn at 67% regardless of activity. Action: investigate "
-                  "product fit and service quality in the German operation specifically; "
-                  "this is not a customer-mix effect."),
+                  "German customers aged 46–60 churn at 67% in a rule where activity was not "
+                  "an antecedent. Action: investigate product fit and service quality in the "
+                  "German operation, then validate whether the gap survives broader controls."),
         C.finding("3", "The riskiest mainstream segment is high-balance / single-product",
-                  "Persona C1: 4,168 customers (41.7%) with ~£120K average balance and "
+                  "Persona C1: 4,168 customers (41.7%) with ~120K average balance units and "
                   "exactly one product; churns at 25.6%, the highest of the three segments. "
                   "Money without product depth is unanchored. Action: cross-sell into C1 "
                   "before the money leaves; measure product depth, not balance, as the "
@@ -557,13 +568,13 @@ report = html.Div([
     section("Mining Expo: the four questions"),
     card(None, None, [
         C.qa("Q1 · Which association rules were the most surprising, and why?",
-             [html.B("{Inactive ∩ Senior ∩ 1 product} → churn"), " (77.3% confidence, lift "
-              "3.79); not because inactivity matters, but because the AGE interaction "
-              "transforms it: younger inactives usually re-engage, senior inactives leave "
-              "for good. Second: ", html.B("{Inactive ∩ Senior ∩ balance > EUR 100K} → churn"),
-              " (72.6%, lift 3.57); visible only after balance was re-binned on the EU "
-              "deposit-guarantee ceiling: money above the state guarantee is the most "
-              "flight-prone in the book. Third: ", html.B("{Senior ∩ Germany} → churn"),
+             [html.B("{Inactive ∩ Age 46–60 ∩ 1 product} → churn"),
+              " (77.3% confidence, lift 3.79); the interaction is much stronger than "
+              "inactivity alone. Second: ", html.B(
+                  "{Inactive ∩ Age 46–60 ∩ balance above 100K} → churn"),
+              " (72.6%, lift 3.57); the 100K cut is a currency-neutral scenario boundary "
+              "and must be sensitivity-tested. Third: ", html.B(
+                  "{Age 46–60 ∩ Germany} → churn"),
               " (67.3%, lift 3.31); it survives despite geography being excluded from "
               "clustering distance, making the German signal a discovered profile rather "
               "than an artifact. The assigned hypothesis {Germany ∩ Inactive ∩ 1 product} "
@@ -578,13 +589,12 @@ report = html.Div([
               "operational segments of a continuum, not natural species."]),
         C.qa("Q3 · What anomalies were found, and what do they suggest in a real banking "
              "context?",
-             ["Three species: (a) 406 risk signals; high-balance pre-churn departures "
-              "(avg £149.8K, 46% German: relationship-manager outreach), disengaged "
-              "single-product churners, and density outliers; (b) 468 rare-but-valid "
-              "profiles (settled elderly, zero-balance) churning at just 4.1%; flagging "
-              "them for 'cleaning' would have destroyed real segments; (c) 2 suspected data "
-              "errors (ages 91–92) for manual verification. The banking lesson: risk hides "
-              "in unusual profiles, so monitoring should be multivariate."]),
+             ["The non-circular typology yields 594 Class-C review signals: 334 IF+DBSCAN "
+              "consensus records, 218 other DBSCAN density outliers, and 42 anomaly records "
+              "overlapping a Phase-3 engagement profile. Another 282 are plausible Class-B "
+              "rarities, including two ages above 90 marked for source verification; zero "
+              "records violate the Class-A domain rules. Exited is evaluated only afterward, "
+              "so these classes support human triage, not automatic decisions."]),
         C.qa("Q4 · How do the findings compare to other banking domains?",
              ["Fraud and credit-risk datasets (Groups 3/8, 4) typically surface financial-"
               "capacity variables. Our churn book is the opposite: CreditScore and Salary "
@@ -598,16 +608,16 @@ report = html.Div([
     card(None, None, [html.Ul([
         html.Li([html.B("Snapshot data, longitudinal question. "), "The assigned 'sudden "
                  "balance drop before closure' cannot be observed in one snapshot per "
-                 "customer; Phase 4 proxies it as {high balance ∩ exited}. A true "
-                 "drop-detector needs transaction time series."]),
+                 "customer. Phase 4 reports {high balance ∩ exited} only as retrospective "
+                 "business context, not a proxy for a preceding drop. A true drop-detector "
+                 "needs transaction time series."]),
         html.Li([html.B("Weak geometric separation. "), "All silhouettes ≤ 0.164: three "
                  "useful, stable, business-distinct segments; not three natural species."]),
-        html.Li([html.B("Retrospective constructs. "), "Rule confidences (52–77%) and "
-                 "Class-C rates describe this historical snapshot; deployed prospectively, "
-                 "expect regression toward the lift values."]),
+        html.Li([html.B("Post-hoc validation. "), "Rule confidences and anomaly-class churn "
+                 "rates describe this historical snapshot; validate both out of time."]),
         html.Li([html.B("Discretization sensitivity. "), "Rules depend on bin boundaries "
-                 "(Senior = 46–60), fixed from domain conventions before mining."]),
-        html.Li([html.B("No causal claims. "), "Germany's 2× churn and the senior effect are "
+                 "(including the explicit age 46–60 and currency-neutral 100K bands)."]),
+        html.Li([html.B("No causal claims. "), "Germany's 2× churn and the age-band effect are "
                  "associations in one bank's book over one period. Correct response: targeted "
                  "investigation and A/B-tested offers, not blanket policy."]),
         html.Li([html.B("Method-setting residue. "), "DBSCAN counts depend on (eps=1.25, "
@@ -618,8 +628,10 @@ report = html.Div([
                  "least two independent methods. The limitations bound how far the findings "
                  "generalize beyond this snapshot.", className="footnote")]),
 
-    callout(["Pipeline: notebooks/notebook.ipynb (Phases 1–4, random_state = 42, full "
-             "10,000 records, no sampling) → prepare_data.py (assembles this dashboard's "
+    callout(["Pipeline: phase1_preprocessing.ipynb → phase2_clustering.ipynb → "
+             "phase3_association_rules.ipynb → phase4_anomaly_detection.ipynb "
+             "(random_state = 42, full 10,000 records, no sampling) → prepare_data.py "
+             "(assembles this dashboard's "
              "cache; recomputed values verified against the notebook: Ward ARI 0.7461, "
              "NMI 0.7014, silhouettes to 4 decimals) → app.py (Plotly Dash). Stack: pandas, "
              "scikit-learn, mlxtend, SciPy, Plotly Dash."],

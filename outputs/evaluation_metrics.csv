@@ -1,0 +1,25 @@
+Phase,Metric,Value,Unit,Definition,Source
+Phase 1,Clustering distance features,8.0,features,Financial/behavioral features in the Euclidean matrix; no Geography/Gender OHE or Exited.,phase1_preprocessing.ipynb
+Phase 1,Continuous variables binned,5.0,variables,"CreditScore, Age, Tenure, Balance, and EstimatedSalary.",phase1_preprocessing.ipynb
+Phase 1,Domain-range violations,0.0,checks,Range or integer-type violations under the documented audit rules.,phase1_preprocessing.ipynb
+Phase 1,Duplicate rows,0.0,records,Exact duplicate raw rows.,phase1_preprocessing.ipynb
+Phase 1,Missing values,0.0,cells,Null cells before preprocessing.,phase1_preprocessing.ipynb
+Phase 1,Raw rows audited,10000.0,records,Rows read from the raw Kaggle snapshot.,phase1_preprocessing.ipynb
+Phase 2,Adjusted Rand Index (K-Means vs Ward),0.7461064071371284,score,Full-data partition agreement adjusted for chance.,phase2_clustering.ipynb
+Phase 2,Cophenetic correlation (Ward),0.3943564720543238,correlation,"Ward tree on deterministic n=2,000 diagnostic sample.",phase2_clustering.ipynb
+Phase 2,DBSCAN epsilon,1.25,standardized distance,Tested value nearest the 10-NN distance knee (1.2965).,phase2_clustering.ipynb
+Phase 2,DBSCAN noise records,554.0,records,Full-data density-noise records passed to Phase 4.,phase2_clustering.ipynb
+Phase 2,Normalized Mutual Information (K-Means vs Ward),0.7014239043967168,score,Full-data information agreement between partitions.,phase2_clustering.ipynb
+Phase 2,Selected K,3.0,clusters,Documented discovery choice after Elbow/Silhouette comparison.,phase2_clustering.ipynb
+Phase 2,"Silhouette score (K-Means, selected K)",0.15002867899221134,score,Full-data silhouette for the selected K-Means partition.,phase2_clustering.ipynb
+Phase 3,Documented churn rules,10.0,rules,Ranked non-redundant rules with individual business commentary.,phase3_association_rules.ipynb
+Phase 3,Highest lift (retained churn rules),3.794309098472159,lift,Maximum lift among the non-redundant churn-rule set.,phase3_association_rules.ipynb
+Phase 3,Non-redundant churn rules retained,11.0,rules,"Single-churn-consequent rules adding ≥1% confidence over the best proper subset, or having no parent.",phase3_association_rules.ipynb
+Phase 3,Rules after confidence and lift filters,613.0,rules,"Rules with confidence ≥ 0.50 and lift ≥ 1.50, after leakage guards.",phase3_association_rules.ipynb
+Phase 3,Rules after confidence filter,6458.0,rules,Rules with confidence ≥ 0.50.,phase3_association_rules.ipynb
+Phase 3,Rules generated,45820.0,rules,All association rules generated from frequent itemsets before confidence/lift filters.,phase3_association_rules.ipynb
+Phase 4,Anomaly candidates before corroboration,876.0,records,"Union of IQR, Z-score, Isolation Forest, and Phase 2 DBSCAN flags.",phase4_anomaly_detection.ipynb
+Phase 4,Corroborated anomalies (2+ methods),453.0,records,Candidates flagged by at least two of the four core methods.,phase4_anomaly_detection.ipynb
+Phase 4,F1-like churn alignment (2+ methods),0.1807228915662651,score,Harmonic summary of overlap metrics; not anomaly accuracy.,phase4_anomaly_detection.ipynb
+Phase 4,Precision-like churn alignment (2+ methods),0.4966887417218543,proportion,Exited share among 2+ method candidates; Exited is not anomaly ground truth.,phase4_anomaly_detection.ipynb
+Phase 4,Recall-like churn alignment (2+ methods),0.1104565537555228,proportion,Share of Exited=1 records in the 2+ method pool; not predictive recall.,phase4_anomaly_detection.ipynb

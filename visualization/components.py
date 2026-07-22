@@ -194,7 +194,7 @@ def persona_card(k):
     stats = [
         (f"{c['n']:,}", f"customers ({c['share']}%)"),
         (f"{c['churn']}%", "churn rate"),
-        (f"£{c['balance_mean']:,.0f}", "avg balance"),
+        (f"{c['balance_mean']:,.0f}", "avg balance units"),
         (f"{c['products_mean']:.2f}", "avg products"),
         (f"{c['active_pct']}%", "active members"),
         (f"{geo} {c['geo_mix'][geo]:.0f}%", "largest country"),
@@ -273,7 +273,7 @@ DECISIONS = [
     ("Duplicates & consistency", "None found; no removal",
      "0 duplicate rows / IDs; all values inside domain-valid ranges; category labels clean."),
     ("Outliers (Age, CreditScore)", "RETAINED, not deleted",
-     "Seniors and low-score customers are real segments. Deleting them would have erased the "
+     "Older and low-score customers are valid records. Deleting them would have erased "
      "project's main finding; they are re-examined in Phase 4 instead."),
     ("Scaling (Path A: clustering)", "StandardScaler on 6 numeric fields",
      "Balance/Salary live in the 100K range vs products in 1–4; unscaled, Euclidean distance "
@@ -282,8 +282,8 @@ DECISIONS = [
      "Nominal categories one-hot-encoded into Euclidean space would force country/gender splits. "
      "They are reintroduced AFTER clustering, so any country skew is a discovery, not an artifact."),
     ("Binning (Path B: rules)", "Domain-anchored bands, not equal-width",
-     "Credit-score tiers, life-stage ages (Senior = 46–60), a dedicated Zero-Balance bin for the "
-     "36% spike, salary quartiles. Equal-width bins would bury the balance spike."),
+     "Credit-score tiers, explicit numeric age bands, a dedicated Zero-Balance bin for the "
+     "36% spike, a currency-neutral 100K scenario cut, and salary quartiles."),
     ("Feature selection", "Correlation + entropy, used as a guide",
      "Both lenses agree on Age/IsActiveMember; entropy alone catches NumOfProducts. Weak features "
      "stay in unsupervised phases; churn is a validation lens, not a target."),
@@ -303,16 +303,24 @@ def decisions_table():
 # ===========================================================================
 
 def action_table():
+    rows = M["anomaly_classes"]
+    grouped = {}
+    for prefix in ("A", "B", "C"):
+        subset = [row for row in rows if row["cls"].startswith(prefix)]
+        count = sum(row["n"] for row in subset)
+        churned_equiv = sum(row["n"] * row["churn_pct"] / 100 for row in subset)
+        grouped[prefix] = (count, churned_equiv / count * 100 if count else 0.0)
+
     rows_data = [
-        ("A: Suspected data error", "2", "0%",
-         "Ages 91–92: legal but implausible. Verify against source systems; exclude from decisions.",
+        ("A: Data error", f"{grouped['A'][0]:,}", f"{grouped['A'][1]:.1f}%",
+         "Outside a documented domain rule. Verify against source systems before business use.",
          "gray"),
-        ("B: Rare but legitimate", "468", "4.1%",
-         "Settled elderly, zero-balance profiles, 4-product holders. Monitor only; churn is BELOW "
-         "average. Do not waste retention budget here.", "amber"),
-        ("C: Risk signal", "406", "100%*",
-         "High-balance pre-churn, disengaged single-product, density outliers. Escalate to "
-         "relationship managers; templates to monitor prospectively.", "red"),
+        ("B: Rare but legitimate", f"{grouped['B'][0]:,}", f"{grouped['B'][1]:.1f}%",
+         "Plausible statistical/isolation outliers. Retain, verify where indicated, and monitor.",
+         "amber"),
+        ("C: Risk signal", f"{grouped['C'][0]:,}", f"{grouped['C'][1]:.1f}%",
+         "Independent structural consensus/density evidence or ARM-profile overlap. Human review; "
+         "test retention treatments rather than automate decisions.", "red"),
     ]
     head = html.Tr([html.Th("Class"), html.Th("Records"), html.Th("Churn"),
                     html.Th("Recommended action")])
@@ -350,7 +358,7 @@ PIPELINE = [
     ("ph2", "Phase 2", "Segment (clustering)",
      "K-Means / Ward / DBSCAN → 3 named personas, method-stable (ARI 0.75)."),
     ("ph3", "Phase 3", "Mine rules (Apriori)",
-     "4,105 itemsets → 645 rules → 17 churn rules at ≥ 2.5× lift. Hypothesis confirmed."),
+     "45,820 generated → 11 non-redundant churn rules → 10 interpreted. Hypothesis supported."),
     ("ph4", "Phase 4", "Detect anomalies",
      "6 detectors compared; risk lives in unusual COMBINATIONS (45% churn), not extremes."),
     ("report", "Phase 5", "Communicate",

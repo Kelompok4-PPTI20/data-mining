@@ -5,7 +5,7 @@ Assembles every number the dashboard shows into a small cache folder
 (`visualization/dashboard_data/`) so the Dash app itself does ZERO mining at
 runtime and every interaction stays well under the 100 ms rubric budget.
 
-Inputs (produced by notebooks/notebook.ipynb, Phases 1-4):
+Inputs (produced by the four phase1–phase4 notebooks):
     data/raw/churn.csv                       raw dataset (10,000 x 14)
     data/processed/churn_clustered.csv       K-Means K=3 labels + persona names
     data/processed/churn_clustering_matrix.csv  Path-A scaled matrix
@@ -140,21 +140,21 @@ rec["DBSCAN_Label"] = db_labels
 rec["Ward_Label"] = ward_labels
 for c in ["IQR_flag", "ZScore_flag", "IF_flag", "MAHA_flag", "LOF_flag",
           "DBSCAN_flag", "UNI_flag", "MV_flag", "Composite_Anomaly_Score",
-          "UniMV_Segment", "Anomaly_Class", "Max_Abs_Z", "HighBal_Churn_flag"]:
+          "UniMV_Segment", "Anomaly_Class", "Anomaly_Evidence",
+          "Recommended_Action", "Max_Abs_Z", "HighBal_Churn_flag"]:
     rec[c] = anom[c]
 rec["IF_score"] = anom["IF_anomaly_score"].round(4)
 rec["MAHA_dist2"] = anom["MAHA_dist2"].round(3)
 
 # Phase-1 / Phase-3 bands (same boundaries as the notebook Path-B binning)
 rec["Age_Band"] = pd.cut(rec["Age"], [0, 30, 45, 60, 100],
-                         labels=["Young adult (18-30)", "Middle-aged (31-45)",
-                                 "Senior (46-60)", "Elderly (60+)"])
-# Balance bands anchored on the EUR 100,000 EU deposit-guarantee ceiling
-# (Directive 2014/49/EU), using the same boundaries as the notebook Path-B binning:
-#   https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=celex:32014L0049
+                         labels=["Age 18-30", "Age 31-45",
+                                 "Age 46-60", "Age 61+"])
+# The source does not document currency or insurance status. 100K is a
+# transparent scenario boundary, matching the notebook Path-B binning.
 rec["Balance_Band"] = pd.cut(rec["Balance"], [-1, 0, 100_000, rec["Balance"].max()],
-                             labels=["Zero balance", "Insured (0-100K)",
-                                     "Above ceiling (>100K)"])
+                             labels=["Zero balance", "Balance 0-100K",
+                                     "Balance above 100K"])
 rec["Active_Status"] = rec["IsActiveMember"].map({1: "Active", 0: "Inactive"})
 rec["Churn_Status"] = rec["Exited"].map({1: "Churned", 0: "Retained"})
 rec.to_csv(OUT / "records.csv", index=False)
@@ -171,7 +171,11 @@ M["kpi"] = {
     "churn_rate": round(baseline * 100, 2),
     "n_churned": int(df["Exited"].sum()),
     "n_clusters": 3,
-    "n_churn_rules": 17,   # under the DGS-anchored balance bands (was 13 with 50K/125K)
+    "n_churn_rules": int(len(top_rules)),  # documented, non-redundant top-rule table
+    "n_rules_generated": 45_820,
+    "n_rules_confidence": 6_458,
+    "n_rules_filtered": int(len(all_rules)),
+    "n_nonredundant_churn_rules": 11,
     "n_rules_total": int(len(all_rules)),
     "top_rule_lift": round(float(top_rules["Lift"].max()), 2),
     "top_rule_conf": round(float(top_rules["Confidence (%)"].max()), 1),
@@ -210,7 +214,14 @@ base_cols = ["CreditScore", "Geography", "Gender", "Age", "Tenure", "Balance",
 enc = rec[base_cols].copy()
 for c in ["Geography", "Gender"]:
     enc[c] = LabelEncoder().fit_transform(enc[c])
-mi = mutual_info_classif(enc, rec["Exited"], random_state=RANDOM_STATE)
+mi_discrete = enc.columns.isin([
+    "Geography", "Gender", "Tenure", "NumOfProducts",
+    "HasCrCard", "IsActiveMember",
+])
+mi = mutual_info_classif(
+    enc, rec["Exited"], discrete_features=mi_discrete,
+    random_state=RANDOM_STATE,
+)
 mi_map = dict(zip(base_cols, mi))
 
 numeric = rec[[c for c in base_cols if c not in ("Geography", "Gender")] + ["Exited"]]
@@ -416,67 +427,22 @@ with open(OUT / "metrics.json", "w") as f:
 print("Formatting rules ...", flush=True)
 
 PRETTY = {
-    "Age_Band_Senior": "Senior (46-60)", "Age_Band_Elderly": "Elderly (60+)",
-    "Age_Band_Middle_Aged": "Middle-aged", "Age_Band_Young_Adult": "Young adult",
+    "Age_Band_Age_46_to_60": "Age 46-60", "Age_Band_Age_61_plus": "Age 61+",
+    "Age_Band_Age_31_to_45": "Age 31-45", "Age_Band_Age_18_to_30": "Age 18-30",
     "Active_Status_Inactive": "Inactive member", "Active_Status_Active": "Active member",
     "Products_Label_Products_1": "1 product only", "Products_Label_Products_2": "2 products",
     "CrCard_Status_Has_CrCard": "Has credit card", "CrCard_Status_No_CrCard": "No credit card",
     "Gender_Female": "Female", "Gender_Male": "Male",
     "Geography_Germany": "Germany", "Geography_France": "France", "Geography_Spain": "Spain",
-    "Balance_Band_Insured_Balance": "Insured balance (0-100K)",
-    "Balance_Band_Above_DGS_Ceiling": "Above DGS ceiling (>100K)",
+    "Balance_Band_Balance_0_to_100K": "Balance 0-100K",
+    "Balance_Band_Balance_Above_100K": "Balance above 100K",
     "Balance_Band_Zero_Balance": "Zero balance",
     "Churn_Status_Churned": "CHURNED",
 }
 
-COMMENTARY = {
-    frozenset({"Active_Status_Inactive", "Age_Band_Senior", "Products_Label_Products_1"}):
-        ("The single strongest churn profile found. Inactive seniors holding only one product "
-         "churn at ~77% - nearly 4x the 20.4% base rate. Action: proactive retention call before a "
-         "second consecutive inactive quarter, plus a bundled-product offer."),
-    frozenset({"Active_Status_Inactive", "Age_Band_Senior"}):
-        ("Inactivity alone is a much weaker signal - it is the AGE interaction that drives risk. "
-         "Seniors who go quiet tend to disengage permanently, while younger inactive customers often "
-         "re-engage on their own."),
-    frozenset({"Active_Status_Inactive", "Age_Band_Senior", "CrCard_Status_Has_CrCard"}):
-        ("Holding a credit card does not protect inactive seniors at all - the card is a shallow "
-         "anchor. Risk is essentially identical to the card-free version of this profile."),
-    frozenset({"Age_Band_Senior", "Geography_Germany"}):
-        ("The most surprising rule: German seniors churn at >3x baseline regardless of activity or "
-         "product count. It points to a product-fit or service-quality issue specific to the German "
-         "operation, not just an age effect."),
-    frozenset({"Age_Band_Senior", "Gender_Female", "Products_Label_Products_1"}):
-        ("A gender-age interaction invisible in simple cross-tabs: female seniors with a single "
-         "product churn at 66%. Combine cross-sell with age-appropriate engagement."),
-    frozenset({"Age_Band_Senior", "Products_Label_Products_1"}):
-        ("Single-product seniors churn at 61%. Cross-sell is the obvious lever - and the data shows "
-         "the bank has historically failed to deepen exactly this segment."),
-    frozenset({"Age_Band_Senior", "CrCard_Status_Has_CrCard", "Products_Label_Products_1"}):
-        ("A credit card does NOT reduce churn risk for single-product seniors. Card-only "
-         "relationships are shallow relationships."),
-    frozenset({"Age_Band_Senior", "Gender_Female"}):
-        ("Senior + female alone - without inactivity or product-count conditions - already clears "
-         "the 2.5x lift bar. The two demographics compound."),
-    frozenset({"Active_Status_Inactive", "Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling"}):
-        ("New with the DGS-anchored binning: inactive seniors holding more than the EUR 100K "
-         "deposit-guarantee ceiling churn at 72.6%. Money above the state guarantee is the most "
-         "mobile money in the book - the highest-priority relationship-manager list."),
-    frozenset({"Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling", "Products_Label_Products_1"}):
-        ("Single-product seniors above the insured ceiling - high-value, shallow-anchored, "
-         "uninsured excess: the costliest churn profile per customer."),
-    frozenset({"Age_Band_Senior", "Balance_Band_Above_DGS_Ceiling"}):
-        ("Seniors above the EUR 100K ceiling churn at 57.7% (~3x baseline). Under the old 50-125K "
-         "binning this pattern was split across two bands and read as 'the bank retains the "
-         "wealthy' - the regulatory boundary reverses that conclusion: uninsured excess is the "
-         "most flight-prone money."),
-    frozenset({"Age_Band_Senior", "CrCard_Status_Has_CrCard", "Gender_Female"}):
-        ("Female senior cardholders - the same story again: the card alone does not anchor the "
-         "relationship."),
-    frozenset({"Products_Label_Products_1", "Geography_Germany", "Active_Status_Inactive"}):
-        ("Validates the assigned project hypothesis: inactive German single-product customers churn "
-         "at >2.5x baseline. Together with the German-senior rule, evidence that Germany has a "
-         "structural retention problem."),
-}
+# Rule-specific commentary is exported by Phase 3 after its non-redundancy
+# check. Keeping that text in one source prevents the dashboard from drifting
+# from the assessed notebook.
 
 def parse_frozen(s):
     return frozenset(ast.literal_eval(s.replace("frozenset(", "").rstrip(")")))
@@ -495,10 +461,14 @@ for i, r in top_rules.iterrows():
         "lift": float(r["Lift"]),
         "conviction": float(r["Conviction"]),
         "customers": int(round(r["Support (%)"] / 100 * 10_000)),
-        "commentary": COMMENTARY.get(items, "High-lift churn profile - see rule table."),
+        "commentary": (
+            r.get("Business Commentary")
+            if pd.notna(r.get("Business Commentary"))
+            else "High-lift churn profile - see rule table."
+        ),
     })
 
-# All churn-consequent rules from the full rule file (17 under the DGS bands)
+# All churn-consequent rules from the full filtered rule file.
 def frozen_ok(s):
     try:
         return parse_frozen(s)
@@ -507,8 +477,10 @@ def frozen_ok(s):
 
 all_rules["A"] = all_rules["antecedents"].apply(frozen_ok)
 all_rules["C"] = all_rules["consequents"].apply(frozen_ok)
-churn13 = all_rules[(all_rules["C"].apply(lambda x: "Churn_Status_Churned" in x)) &
-                    (~all_rules["A"].apply(lambda x: "Churn_Status_Churned" in x))]
+churn13 = all_rules[
+    (all_rules["C"] == frozenset({"Churn_Status_Churned"}))
+    & (~all_rules["A"].apply(lambda x: "Churn_Status_Churned" in x))
+]
 churn13 = churn13.sort_values("lift", ascending=False)
 extra = []
 for _, r in churn13.iterrows():

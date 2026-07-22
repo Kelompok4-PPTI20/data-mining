@@ -1,5 +1,13 @@
 """Run all four KDD phases in notebook order."""
 
+import os
+
+
+# The CLI pipeline must also run in headless/CI environments. Notebook kernels
+# still render figures inline; this only supplies a non-GUI fallback before the
+# phase modules import matplotlib.pyplot.
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 
 def main() -> None:
     """Execute the four phase modules as one end-to-end pipeline."""

@@ -176,10 +176,9 @@ def run_phase1():
     if violations_total == 0 and n_frac == 0:
         print('  Decision: All values fall inside domain-valid ranges; category labels are')
         print('            clean (no whitespace/case variants); integer fields intact.')
-        print('  Action:   No correction applied. These same domain bounds feed the Phase 4')
-        print('            Class-A "Data Error" anomaly definition (which applies an even')
-        print('            stricter Age > 90 review rule), so borderline records are')
-        print('            re-examined there instead of being silently deleted here.')
+        print('  Action:   No correction applied. The same documented domain bounds feed')
+        print('            the Phase 4 data-error screen; admissible borderline records')
+        print('            remain available for source verification instead of deletion.')
     else:
         print('  Decision: Violations detected -> records flagged for review before mining.')
 
@@ -250,7 +249,7 @@ def run_phase1():
     # The skewness/kurtosis table is not decoration; each shape has a downstream consequence:
     # 
     # - **Age (skew +1.01)** — the only strongly right-skewed feature: most customers are 30–45 with a long senior tail (median 37 < mean 38.9). Consequence: age outliers will appear on the upper side only, and the skew inflates the standard deviation — which is exactly why IQR and Z-score will later disagree on this feature (Phase 4).
-    # - **Balance (kurtosis −1.49)** — the most distinctive shape in the dataset: a point-mass at exactly 0 (36.2% of customers) next to a roughly bell-shaped positive mode around £120K. The *mean* balance (£76.5K) therefore describes almost nobody. This bimodality predicts that distance-based clustering will use the zero/positive gap as a primary split (Phase 2 confirms it) and motivates a dedicated `Zero_Balance` bin in Path B — equal-width binning would bury the spike.
+    # - **Balance (kurtosis −1.49)** — the most distinctive shape in the dataset: a point-mass at exactly 0 (36.2% of customers) next to a roughly bell-shaped positive mode around 120K dataset units. The *mean* balance (76.5K) therefore describes almost nobody. This bimodality predicts that distance-based clustering will use the zero/positive gap as a primary split (Phase 2 confirms it) and motivates a dedicated `Zero_Balance` bin in Path B — equal-width binning would bury the spike.
     # - **EstimatedSalary (skew ≈ 0, kurtosis −1.18)** — near-uniform between its bounds. A uniform variable has no tails, so it can produce no statistical outliers (Phase 4 confirms: max |z| = 1.74) and carries almost no churn information (both feature-selection lenses confirm).
     # - **CreditScore (skew −0.07)** — approximately normal with a mild low tail; the only near-Gaussian variable, so z-score machinery behaves as designed on it.
     # - **Tenure (skew 0.01, kurtosis −1.17)** — near-uniform discrete; customers are spread evenly across relationship years, so tenure alone separates nothing.
@@ -373,7 +372,7 @@ def run_phase1():
     # 
     # The fence table explains itself once read against the distribution shapes above:
     # 
-    # - **Balance & EstimatedSalary: 0 outliers *by construction*, not by cleanliness.** Both are platykurtic (flat, short-tailed), so Q1 and Q3 sit far apart and the ±1.5×IQR fences land *outside the observed data range* (Balance upper fence £319K vs. observed max £251K; Salary fences −£96.6K / £297K vs. a ~£0–200K range). A flat, bounded distribution cannot fail the IQR test. Stating this explicitly prevents the false conclusion that "balances are clean" — the method simply cannot flag anything here.
+    # - **Balance & EstimatedSalary: 0 outliers *by construction*, not by cleanliness.** Both are platykurtic (flat, short-tailed), so Q1 and Q3 sit far apart and the ±1.5×IQR fences land *outside the observed data range* (Balance upper fence 319K vs. observed max 251K; Salary fences −96.6K / 297K vs. a ~0–200K range, all in dataset units). A flat, bounded distribution cannot fail the IQR test. Stating this explicitly prevents the false conclusion that "balances are clean" — the method simply cannot flag anything here.
     # - **Age: 359 outliers (3.6%), all upper-tail.** The fence is 62, so every customer aged 63–92 is technically an IQR outlier. These are not errors — they are the senior segment. Retaining them is what later allows Phase 3 to discover that seniors are the strongest churn antecedent in the dataset; "cleaning" them away would have deleted the project's main finding.
     # - **CreditScore: 15 outliers (0.15%), all lower-tail** (score < 383 against a hard floor of 350) — plausible low-credit customers, retained.
     # 
@@ -421,7 +420,7 @@ def run_phase1():
     # ### Interpretation — What the Correlation Matrix Does (and Does Not) Reveal
     # 
     # - **No strong linear churn driver exists.** The best single correlate of `Exited` is Age at |r| = 0.285. Churn is not linearly explainable by any one column — early evidence that the interesting knowledge lives in *combinations* (clusters, rules), which is the project's premise.
-    # - **The sign on Balance deserves attention:** r = +0.119 — customers with *more* money churn slightly *more*, not less. Balance does not buy loyalty in this book. This foreshadows both the high-balance watchlist cluster (Phase 2) and the high-balance pre-churn anomaly class (Phase 4).
+    # - **The sign on Balance deserves attention:** r = +0.119 — customers with *more* money churn slightly *more*, not less. Balance does not buy loyalty in this book. This foreshadows the high-balance watchlist cluster (Phase 2) and the retrospective high-balance exited profile (Phase 4).
     # - **The feature space is almost orthogonal.** The only notable inter-feature correlation is Balance ↔ NumOfProducts at r = −0.30 (customers concentrating funds tend to hold fewer products). Two consequences: (a) no multicollinearity, so nothing needs dropping for redundancy; (b) with so little shared variance the data has no strong low-dimensional structure — an early warning that cluster separation will be geometrically weak, which Phase 2's silhouette (~0.15) confirms.
     # - **The linear lens visibly fails on NumOfProducts** (|r| = 0.048 → "Weak"): actual churn by product count is 27.7% → 7.6% → 82.7% → 100% for 1 → 2 → 3 → 4 products — an extreme U-shape whose ups and downs cancel in a linear coefficient. Correlation-only selection would have discarded one of the most informative features in the dataset.
     # 
@@ -441,7 +440,20 @@ def run_phase1():
     X = df_encoded.drop(columns=['Exited'])
     y = df_encoded['Exited']
 
-    mi_scores = mutual_info_classif(X, y, random_state=RANDOM_STATE)
+    # Label-encoded categories and bounded counts are discrete variables. Passing
+    # this mask avoids treating arbitrary category codes as continuous distances
+    # in the mutual-information estimator.
+    discrete_mi_features = {
+        'Geography', 'Gender', 'Tenure', 'NumOfProducts',
+        'HasCrCard', 'IsActiveMember',
+    }
+    mi_discrete_mask = X.columns.isin(discrete_mi_features)
+    mi_scores = mutual_info_classif(
+        X,
+        y,
+        discrete_features=mi_discrete_mask,
+        random_state=RANDOM_STATE,
+    )
     mi_df = (pd.DataFrame({'Feature': X.columns, 'MI Score': mi_scores})
                .sort_values('MI Score', ascending=False)
                .reset_index(drop=True))
@@ -628,14 +640,14 @@ def run_phase1():
     # Step 2: Bin Age → life-stage segments
     #   Young_Adult ≤30  ≈ Eurostat "young people" = 15–29:
     #     https://ec.europa.eu/eurostat/documents/3217494/6776245/KS-05-14-031-EN-N.pdf
-    #   Elderly >60      ≈ UN "older persons" = aged 60+:
+    #   Age_61_plus      ≈ UN "older persons" = aged 60+:
     #     https://www.un.org/en/development/desa/population/publications/pdf/ageing/WorldPopulationAgeing2019-Highlights.pdf
     #   The 45 boundary = onset of "middle adulthood" (~40–65) in Erikson's and
     #   Levinson's life-stage frameworks; kept at the decade-friendly 45.
     df_txn['Age_Band'] = pd.cut(
         df_txn['Age'],
         bins=[0, 30, 45, 60, 100],
-        labels=['Young_Adult', 'Middle_Aged', 'Senior', 'Elderly']
+        labels=['Age_18_to_30', 'Age_31_to_45', 'Age_46_to_60', 'Age_61_plus']
     )
 
     # Step 3: Bin Tenure → relationship depth
@@ -650,20 +662,15 @@ def run_phase1():
         labels=['New_Customer', 'Established', 'Loyal']
     )
 
-    # Step 4: Bin Balance → deposit-insurance anchor (REVISED from 0/50K/125K)
-    #   0       = structural zero-balance point-mass (36.2% of customers).
-    #   100,000 = EU Deposit Guarantee Scheme ceiling — EUR 100,000 protected per
-    #             depositor per bank, Directive 2014/49/EU; applies to France,
-    #             Germany, and Spain alike:
-    #     https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=celex:32014L0049
-    #     https://finance.ec.europa.eu/banking/banking-regulation/deposit-guarantee-schemes_en
-    #   The previous 50K/125K scheme had no external anchor AND produced a dead
-    #   item: Low_Balance (0–50K] carried 0.75% support < min_support (0.03), so
-    #   it could never enter a single frequent itemset.
+    # Step 4: Bin Balance into a structural zero group and transparent 100K bands.
+    #   The dataset does not document a currency or account-level deposit regime,
+    #   so 100K is only an interpretable analytical scenario boundary, not a legal
+    #   insurance threshold. This preserves the zero-balance point mass and useful
+    #   ARM support without making an unsupported regulatory claim.
     df_txn['Balance_Band'] = pd.cut(
         df_txn['Balance'],
         bins=[-1, 0, 100000, df_txn['Balance'].max()],
-        labels=['Zero_Balance', 'Insured_Balance', 'Above_DGS_Ceiling']
+        labels=['Zero_Balance', 'Balance_0_to_100K', 'Balance_Above_100K']
     )
 
     # Step 5: Bin EstimatedSalary -> income quartiles
@@ -705,27 +712,21 @@ def run_phase1():
     print(f"\n  ✔ Transaction matrix saved to: {TRANSACTIONS_PATH}")
 
 
-    # ### Binning Revision — External Anchors, and How Changing the Bins Changed the Conclusions
-    # 
-    # Every non-quantile bin boundary above is tied to a citable external anchor (links in the code comments):
-    # 
-    # | Feature | Bins | Anchor |
+    # ### Binning Rationale and Sensitivity
+    #
+    # | Feature | Bins | Rationale |
     # |---|---|---|
-    # | CreditScore | <580 / 580–669 / 670–739 / 740–799 / 800+ | Official FICO score bands (myFICO, Experian) — the dataset’s 350–850 range is the FICO scale |
-    # | Age | ≤30 / 31–45 / 46–60 / >60 | Eurostat “young people” = 15–29; UN “older persons” = 60+; middle-adulthood onset (~45) per Erikson/Levinson life-stage frameworks |
-    # | Tenure | 0–2 / 3–5 / 6–10 | Dwyer–Schurr–Oh (1987) relationship stages (exploration → buildup → maturity); numeric cuts = thirds of the observed 0–10 range |
-    # | Balance | 0 / (0–100K] / >100K | Structural zero point-mass (36.2% of customers) + the **EUR 100,000 EU deposit-guarantee ceiling, Directive 2014/49/EU** |
-    # | EstimatedSalary | quartiles | Standard distributional practice for income (Eurostat/OECD quantile reporting) — no absolute cross-country anchor exists |
-    # 
-    # **What changed:** Balance was previously binned 0 / 50K / 125K with no external anchor. That scheme had two measurable defects: (1) the Low band (0–50K] held only **0.75%** of customers — below the 3% support floor, so it could never appear in any frequent itemset: a dead item; and (2) the 125K cut split the positive-balance mode at an arbitrary point.
-    # 
-    # **How the conclusions changed (binning sensitivity, demonstrated on this dataset):**
-    # 
-    # - Churn now rises monotonically across the bands: Zero **13.8%** → Insured (≤100K) **20.6%** → Above ceiling (>100K) **25.2%**.
-    # - The churn-rule count rose from 13 to **17**. Five rules involve `Above_DGS_Ceiling`, including {Inactive ∩ Senior ∩ Above_DGS} → Churned at **72.6% confidence, lift 3.57** — the #2 rule in the entire set.
-    # - One conclusion **reversed**: under the old bands the only balance rule was the mid-band (50–125K) senior rule, which read as “the bank retains the wealthy, loses the middle.” With the regulatory boundary the pattern is the opposite — seniors holding **more than the state-guaranteed EUR 100K** are the highest-risk balance group. Deposits beyond the guarantee are rationally the first money to move, and the data confirms they do.
-    # 
-    # This is the concrete reason the rubric demands domain-justified rather than arbitrary discretization: **bin boundaries determine which patterns are representable.** Same data, same algorithm, same thresholds — a different and more defensible set of discoveries once the boundary matched a real banking construct.
+    # | CreditScore | <580 / 580–669 / 670–739 / 740–799 / 800+ | FICO-style score bands, consistent with the observed 350–850 scale |
+    # | Age | ≤30 / 31–45 / 46–60 / >60 | Interpretable life-stage bands with neutral output labels |
+    # | Tenure | 0–2 / 3–5 / 6–10 | Early, established, and longer relationships across the observed 0–10 range |
+    # | Balance | 0 / (0–100K] / >100K | Structural zero point-mass plus a transparent 100K analytical scenario boundary; currency and insurance status are not documented |
+    # | EstimatedSalary | quartiles | Distribution-relative bands because the source provides no reliable cross-country unit or absolute anchor |
+    #
+    # The earlier 0 / 50K / 125K balance scheme had a measurable weakness: its
+    # low positive band held only 0.75% of customers, below the 3% support floor.
+    # The revised bins keep every state interpretable and mineable. The important
+    # methodological lesson is that discretization changes which rules Apriori can
+    # represent, so conclusions are reported with their exact bin definitions.
     # 
 
     # ## Phase 1 Preprocessing Report - Decision Summary
@@ -740,7 +741,7 @@ def run_phase1():
     # | Profile-Only Variables (Path A) | Geography, Gender, Exited | Excluded from clustering distance; retained for post-cluster profiling | Geography and Gender are nominal categories. Using OHE with Euclidean distance would force fixed country/gender separation into K-Means, DBSCAN, and Ward. Excluding them makes later over-representation a stronger discovery. Exited remains a validation lens, not a clustering input. |
     # | Scaling (Path A) | CreditScore, Age, Tenure, Balance, NumOfProducts, EstimatedSalary | StandardScaler | K-Means, DBSCAN, and Ward linkage use Euclidean distance, so scaling prevents Balance/Salary from dominating. NumOfProducts is ordinal-discrete, so its cluster interpretation is treated as an engagement count rather than a continuous measurement. |
     # | Binary Handling (Path A) | HasCrCard, IsActiveMember | Kept as 0/1 behavior indicators | These are already numeric behavioral attributes on a bounded scale. They are relevant to customer engagement and do not require OHE. |
-    # | Binning (Path B) | CreditScore, Age, Tenure, Balance, EstimatedSalary | Externally anchored bins; salary uses quartiles | CreditScore follows the official FICO bands (myFICO/Experian). Age follows Eurostat’s young-people definition (≤30) and the UN older-persons boundary (60). Balance uses the EUR 100,000 EU deposit-guarantee ceiling (Directive 2014/49/EU) plus the structural zero point-mass — revised from an unanchored 50K/125K scheme whose Low band (0.75% support) was unminable. Tenure follows the Dwyer–Schurr–Oh relationship-stage model with cuts at thirds of the 0–10 range. EstimatedSalary has no reliable multi-country anchor, so quartiles are used — standard Eurostat/OECD practice for income. |
+    # | Binning (Path B) | CreditScore, Age, Tenure, Balance, EstimatedSalary | Domain-interpretable bands; salary uses quartiles | CreditScore uses FICO-style bands consistent with the 350–850 scale. Age and tenure use plainly named life-stage and relationship-depth ranges. Balance separates the structural zero point-mass and uses 100K only as a transparent analytical scenario boundary because the source documents neither currency nor insurance status. EstimatedSalary has no reliable multi-country unit, so quartiles are used. |
     # | Feature Selection | Correlation + mutual information / entropy lens | Used as a profiling guide, not as hard deletion | MI highlights Age, NumOfProducts, Geography, IsActiveMember, Balance, and Gender as the strongest churn lenses. Lower-MI fields remain in unsupervised profiling so discovery is not reduced to supervised target chasing. |
     # 
     # **Outputs Produced:**

@@ -58,7 +58,8 @@ interrupted, just run it again.
 
 ## Numbers trace to the notebook
 
-Everything shown is derived from `notebooks/notebook.ipynb` outputs
-(`data/processed/`, `outputs/`) with `random_state=42`, full 10,000 records.
+Everything shown is derived from the executed `phase1_preprocessing.ipynb` →
+`phase4_anomaly_detection.ipynb` outputs (`data/processed/`, `outputs/`) with
+`random_state=42`, full 10,000 records.
 Recomputed pieces were verified against the notebook: Ward silhouette 0.1279,
 ARI 0.7461, NMI 0.7014, K-sweep silhouettes to 4 decimals, DBSCAN noise 554.

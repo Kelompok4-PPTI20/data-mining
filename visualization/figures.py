@@ -56,7 +56,7 @@ def ov_bar(labels, values, colors, height=225, suffix="%", texts=None):
 
 
 OV_SENIOR = ov_bar(
-    ["All customers", "Senior (46-60)", "Senior + inactive", "Senior + inactive + 1 product"],
+    ["All customers", "Age 46-60", "Age 46-60 + inactive", "Age 46-60 + inactive + 1 product"],
     [BASELINE, M["churn_by"]["Age_Band"]["churn_pct"][2], 68.4, 77.3],
     ["#B7BEC9", T.AMBER, "#EC6142", T.RED])
 
@@ -87,7 +87,7 @@ DIST_FEATURES = ["Age", "Balance", "NumOfProducts", "CreditScore", "Tenure", "Es
 DIST_INSIGHTS = {
     "Age": ("Churned customers are visibly OLDER: the red distribution is shifted right, "
             "peaking around 45-55 while retained customers peak around 30-37. Age is the single "
-            "strongest churn correlate (|r| = 0.29) and the seed of every top Phase-3 rule."),
+            "strongest churn correlate (|r| = 0.29) and appears in 8 of 10 documented Phase-3 rules."),
     "Balance": ("Two populations, not one: 36.2% of customers hold EXACTLY zero balance (left spike), "
                 "the rest form a bell around 120K. The mean (76.5K) describes almost nobody - and "
                 "counter-intuitively, churners are MORE common among positive balances (r = +0.12). "
@@ -134,21 +134,19 @@ DIM_INSIGHTS = {
                   "formally confirmed as an association rule in Phase 3."),
     "Gender": ("Women churn at 25.1% vs 16.5% for men - a 1.5x gap invisible in the balanced "
                "population split. Phase 3 shows it widens further when combined with age "
-               "(senior + female rules reach 57-66% churn)."),
-    "Age_Band": ("The senior band (46-60) churns at 51% - 2.5x baseline - while young adults sit at "
-                 "7.5%. Note the drop for 60+: the elderly who stayed are settled savers. This "
+               "(age 46-60 + female rules reach 57-66% churn)."),
+    "Age_Band": ("The age 46-60 band churns at 51% - 2.5x baseline - while ages 18-30 sit at "
+                 "7.5%. Note the drop for 61+: this "
                  "non-monotonic shape is why age dominates every Phase-3 rule."),
     "Active_Status": ("Inactive members churn at 26.9% vs 14.3% for active ones. Meaningful, but "
                       "modest alone - Phase 3 shows inactivity only becomes dangerous when it "
-                      "meets senior age (68%) and shallow product depth (77%)."),
+                      "meets age 46-60 (68%) and shallow product depth (77%)."),
     "NumOfProducts": ("The U-curve: two products is the safety sweet spot (7.6%), one product nearly "
                       "quadruples the risk (27.7%), and 3-4 products are near-certain leavers "
-                      "(83% / 100%) - likely distressed or mis-sold relationships."),
-    "Balance_Band": ("Churn rises monotonically with the band: zero balance 13.8%, insured "
-                     "(0-100K) 20.6%, above the EUR 100K deposit-guarantee ceiling 25.2%. Balance "
-                     "does not anchor loyalty - deposits beyond the state guarantee are the most "
-                     "flight-prone, and senior variants of this band reach 58-73% churn in the "
-                     "Phase-3 rules."),
+                      "(83% / 100%) - rare high-churn groups requiring investigation."),
+    "Balance_Band": ("Churn rises with the scenario band: zero balance 13.8%, 0-100K 20.6%, and "
+                     "above 100K 25.2%. The source does not document currency or insurance status; "
+                     "the 100K cut is a sensitivity-tested business scenario, not a legal claim."),
     "Tenure_Band": ("Churn is flat across tenure (~19-22%). Years with the bank buy almost no "
                     "protection - engagement depth, not relationship length, is what matters."),
 }
@@ -656,13 +654,12 @@ CLASS_DONUT_FIG = make_class_donut()
 def make_subtype_fig():
     rows = sorted(M["anomaly_classes"], key=lambda r: r["n"])
     short = {
-        "Statistically Unusual Pattern": "B: Unusual but valid pattern",
+        "Statistical/Isolation Outlier": "B: Statistical/isolation outlier",
+        "Source Verification Recommended": "B: Source verification",
         "Young High-Balance Customer": "B: Young, high balance",
-        "Maximum Product Holder": "B: Holds 4 products",
-        "Density Outlier + Churned": "C: Density outlier + churned",
-        "High-Balance Pre-Churn": "C: High-balance pre-churn",
-        "Disengaged Single-Product Churn": "C: Disengaged single-product",
-        "Senior High-Value Departure": "C: Senior high-value departure",
+        "IF + DBSCAN Consensus": "C: IF + DBSCAN consensus",
+        "DBSCAN Density Outlier": "C: DBSCAN density outlier",
+        "ARM Profile Overlap": "C: ARM profile overlap",
         "Data Error": "A: Suspected data error",
     }
 

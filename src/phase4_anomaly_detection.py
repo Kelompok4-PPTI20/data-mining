@@ -17,6 +17,7 @@ if __package__:
         DBSCAN_OUTLIERS_PATH,
         HIGH_CONFIDENCE_ANOMALIES_PATH,
         RANDOM_STATE,
+        RAW_PATH,
         configure_runtime,
         display,
         require_files,
@@ -28,6 +29,7 @@ else:
         DBSCAN_OUTLIERS_PATH,
         HIGH_CONFIDENCE_ANOMALIES_PATH,
         RANDOM_STATE,
+        RAW_PATH,
         configure_runtime,
         display,
         require_files,
@@ -57,13 +59,14 @@ def run_phase4():
     # **Systematic comparison plan:** the three required methods are compared pairwise, and additionally the univariate family (IQR ∪ Z-score) is compared against the multivariate family (Mahalanobis ∪ LOF ∪ Isolation Forest), with every disagreement between the families decomposed and explained.
     # 
     # **Strategic Focus:** Detect structural anomalies, specifically:
-    # - Customers with sudden high Balance → Exited=1 (pre-closure balance drop signal)
+    # - Retrospectively profile financially material high-balance exits; this
+    #   snapshot cannot observe a preceding balance drop
     # - Cross-reference with DBSCAN noise points from Phase 2
     # 
     # **Anomaly Classification:**
     # - Class A: Data Error (unrealistic/impossible values)
     # - Class B: Rare Legitimate Case (statistically unusual but valid)
-    # - Class C: Risk Signal (behavioral pattern indicating pre-churn distress)
+    # - Class C: Risk Signal (structural rarity or Phase 3 profile overlap)
     # 
 
     # In[31]:
@@ -72,6 +75,12 @@ def run_phase4():
     # ── IQR Outlier Detection ─────────────────────────────────────────────────────
     anomaly_cols = ['CreditScore', 'Age', 'Balance', 'EstimatedSalary']
     df_anomaly   = df.copy()
+    source_row_numbers = pd.read_csv(RAW_PATH, usecols=['RowNumber'])['RowNumber']
+    if len(source_row_numbers) != len(df_anomaly):
+        raise ValueError(
+            'Raw and clean row counts differ; source-row traceability is unsafe.'
+        )
+    df_anomaly.insert(0, 'Source_RowNumber', source_row_numbers.to_numpy())
 
     iqr_flags = pd.DataFrame(index=df_anomaly.index)
 
@@ -445,12 +454,14 @@ def run_phase4():
     # In[37]:
 
 
-    # ── Pre-Churn High-Balance Anomaly Detection ──────────────────────────────────
+    # ── Retrospective high-value exited subset (not a pre-churn detector) ─────────
     print("=" * 70)
-    print(" STRUCTURAL ANOMALY: HIGH-BALANCE CUSTOMER CHURN (PRE-CLOSURE SIGNAL)")
+    print(" RETROSPECTIVE PROFILE: HIGH-BALANCE CUSTOMERS WHO EXITED")
     print("=" * 70)
 
-    # Segment: Churned customers with high balance (>75th percentile of balance)
+    # This cross-sectional snapshot has no transaction sequence. The subset is a
+    # retrospective value-at-risk profile, not evidence of a preceding balance
+    # drop or an operational early-warning detector.
     balance_75th = df['Balance'].quantile(0.75)
     balance_90th = df['Balance'].quantile(0.90)
 
@@ -464,8 +475,8 @@ def run_phase4():
         (df['Exited'] == 0)
     ].copy()
 
-    print(f"\n  Balance 75th Percentile: £{balance_75th:,.0f}")
-    print(f"  Balance 90th Percentile: £{balance_90th:,.0f}")
+    print(f"\n  Balance 75th Percentile: {balance_75th:,.0f} balance units")
+    print(f"  Balance 90th Percentile: {balance_90th:,.0f} balance units")
     print(f"\n  High-Balance + Churned:   {len(high_bal_churn):,} records")
     print(f"  High-Balance + Retained:  {len(high_bal_retained):,} records")
     print(f"  High-Balance Churn Rate:  "
@@ -473,7 +484,7 @@ def run_phase4():
     print(f"  Full Dataset Churn Rate:  {df['Exited'].mean()*100:.1f}%")
 
     # Profile high-balance churners
-    print(f"\n── Profile: High-Balance Churned Customers ──")
+    print(f"\n── Profile: High-Balance Customers Observed as Exited ──")
     display(high_bal_churn[['CreditScore','Age','Tenure','Balance','NumOfProducts',
                              'IsActiveMember','Geography']].describe().round(2))
 
@@ -489,15 +500,13 @@ def run_phase4():
         (df['Balance'] > balance_75th) & (df['Exited'] == 1)
     ).astype(int)
 
-    print(f"\n  ⚠ BUSINESS INTERPRETATION:")
-    print(f"    High-balance customers who close accounts represent the most")
-    print(f"    financially significant churn event for retail banking.")
-    print(f"    These customers may have:")
-    print(f"    1. Moved assets to a competing bank (structural balance drop)")
-    print(f"    2. Made large withdrawals immediately before account closure")
-    print(f"    3. Retired/downsized and consolidated banking relationships")
-    print(f"    → RECOMMENDATION: Trigger Relationship Manager outreach when")
-    print(f"      balance-to-activity ratio declines sharply in high-value accounts.")
+    print(f"\n  BUSINESS INTERPRETATION:")
+    print(f"    These observed exits are financially material because the snapshot")
+    print(f"    records balances above the dataset's 75th percentile.")
+    print(f"    The data cannot show whether balances fell before closure or why the")
+    print(f"    customers exited. Use this profile to design longitudinal monitoring")
+    print(f"    and relationship-manager review, then validate it with transaction")
+    print(f"    histories before treating it as an early-warning signal.")
 
 
     # In[38]:
@@ -513,6 +522,8 @@ def run_phase4():
     # ── Composite Anomaly Score ────────────────────────────────────────────────────
     anomaly_flag_cols = ['IQR_flag', 'ZScore_flag', 'IF_flag', 'DBSCAN_flag']
     df_anomaly['Composite_Anomaly_Score'] = df_anomaly[anomaly_flag_cols].sum(axis=1)
+    candidate_mask = df_anomaly['Composite_Anomaly_Score'] >= 1
+    corroborated_mask = df_anomaly['Composite_Anomaly_Score'] >= 2
 
     # ── Venn Analysis ─────────────────────────────────────────────────────────────
     print("── CROSS-REFERENCE: Anomaly Method Agreement ──")
@@ -530,19 +541,17 @@ def run_phase4():
     print(f"\n── Churn Rate by Composite Anomaly Score ──")
     display(composite_churn[['Churn Rate (%)','Churned','Total']])
 
-    # ── High-Confidence Anomaly Records ──────────────────────────────────────────
-    high_conf_anomalies = df_anomaly[df_anomaly['Composite_Anomaly_Score'] >= 3].copy()
-    print(f"\n── HIGH-CONFIDENCE ANOMALIES (flagged by ≥ 3 methods) ──")
-    print(f"  Count: {len(high_conf_anomalies):,}")
-    print(f"  Churn Rate: {high_conf_anomalies['Exited'].mean()*100:.1f}%")
-    display(high_conf_anomalies[['CreditScore','Age','Balance','NumOfProducts',
-                                  'IsActiveMember','Exited','Geography',
-                                  'Composite_Anomaly_Score']].head(20))
-
-    # Save anomaly report
-    df_anomaly.to_csv(ANOMALY_REPORT_PATH, index=False)
-    high_conf_anomalies.to_csv(HIGH_CONFIDENCE_ANOMALIES_PATH, index=False)
-    print(f"\n  ✔ Anomaly reports saved to outputs/")
+    # Corroboration is defined as agreement from at least two core methods. The
+    # report is persisted only after the evidence-based typology is assigned.
+    corroborated_anomalies = df_anomaly[corroborated_mask].copy()
+    print(f"\n── CORROBORATED ANOMALIES (flagged by ≥ 2 core methods) ──")
+    print(f"  Count: {len(corroborated_anomalies):,}")
+    print(f"  Churn alignment: {corroborated_anomalies['Exited'].mean()*100:.1f}%")
+    display(corroborated_anomalies[[
+        'Source_RowNumber', 'CreditScore', 'Age', 'Balance', 'NumOfProducts',
+        'IsActiveMember', 'Exited', 'Geography', 'Composite_Anomaly_Score',
+    ]].head(20))
+    print('\n  Reports are persisted after classification below.')
 
 
     # In[39]:
@@ -586,104 +595,150 @@ def run_phase4():
     # In[40]:
 
 
-    # ── Anomaly Classification Logic ──────────────────────────────────────────────
-    # The anomaly typology is applied to the FLAGGED pool only (records caught by
-    # >= 1 of the four methods: IQR, Z-score, Isolation Forest, DBSCAN). Records
-    # that no method flagged are labelled "Normal" — the rubric asks to classify
-    # each ANOMALY, and tagging the unflagged ~85% of customers as "rare" would
-    # contradict the typology.
-    BAL_P75 = df['Balance'].quantile(0.75)   # precomputed once (was per-row)
+    # ── Evidence-based anomaly typology (does not use Exited) ───────────────
+    BALANCE_SCENARIO_CUT = 100000
 
     def classify_anomaly(row):
-        """
-        Classify each flagged anomaly record based on its feature-value combination.
-
-        Classification Rules:
-        - DATA ERROR:  Values that are impossible or outside legal/business bounds
-        - RARE VALID:  Statistically unusual but plausible behavioral patterns
-        - RISK SIGNAL: Behavioral patterns associated with churn, financial distress
-        """
+        """Return class, record-level evidence, and a review recommendation."""
         if row['Composite_Anomaly_Score'] == 0:
-            return 'Normal — Not Flagged'
+            return (
+                'Normal — Not Flagged',
+                'No core detector flagged the record.',
+                'Routine handling.',
+            )
 
-        # Data Error indicators
-        if row['CreditScore'] < 300 or row['CreditScore'] > 900:
-            return 'A: Data Error'
+        impossible = (
+            not 300 <= row['CreditScore'] <= 850
+            or not 18 <= row['Age'] <= 100
+            or not 0 <= row['Tenure'] <= 10
+            or row['Balance'] < 0
+            or row['NumOfProducts'] not in {1, 2, 3, 4}
+            or row['HasCrCard'] not in {0, 1}
+            or row['IsActiveMember'] not in {0, 1}
+        )
+        if impossible:
+            return (
+                'A: Data Error',
+                'Value outside the Phase 1 documented domain rules.',
+                'Verify against the source system before business use.',
+            )
+
         if row['Age'] > 90:
-            return 'A: Data Error'
-        if row['Balance'] < 0:
-            return 'A: Data Error'
+            return (
+                'B: Rare Legitimate — Source Verification Recommended',
+                'Admissible age above 90 plus at least one detector flag.',
+                'Verify age; retain if confirmed.',
+            )
 
-        # Risk Signal indicators
-        if row['Exited'] == 1 and row['Balance'] > BAL_P75:
-            return 'C: Risk Signal — High-Balance Pre-Churn'
-        if (row['Exited'] == 1 and row['IsActiveMember'] == 0 
-            and row['NumOfProducts'] == 1):
-            return 'C: Risk Signal — Disengaged Single-Product Churn'
-        if row['Exited'] == 1 and row['Age'] > 65 and row['Balance'] > 100000:
-            return 'C: Risk Signal — Senior High-Value Departure'
-        if row['DBSCAN_flag'] == 1 and row['Exited'] == 1:
-            return 'C: Risk Signal — Density Outlier + Churned'
+        if row['IF_flag'] == 1 and row['DBSCAN_flag'] == 1:
+            return (
+                'C: Risk Signal — IF + DBSCAN Consensus',
+                'Tree isolation and density rarity independently flag the same profile.',
+                'Prioritize a human review; test a retention treatment, not an automatic decision.',
+            )
+        if row['DBSCAN_flag'] == 1:
+            return (
+                'C: Risk Signal — DBSCAN Density Outlier',
+                'Phase 2 places the record outside dense customer neighbourhoods.',
+                'Review the unusual feature combination and monitor engagement.',
+            )
 
-        # Rare Legitimate Case
+        arm_profile_overlap = (
+            (
+                46 <= row['Age'] <= 60
+                and row['IsActiveMember'] == 0
+                and row['NumOfProducts'] == 1
+            )
+            or (
+                row['Geography'] == 'Germany'
+                and row['IsActiveMember'] == 0
+                and row['NumOfProducts'] == 1
+            )
+            or (
+                row['Balance'] > BALANCE_SCENARIO_CUT
+                and row['IsActiveMember'] == 0
+                and row['NumOfProducts'] == 1
+            )
+        )
+        if arm_profile_overlap:
+            return (
+                'C: Risk Signal — ARM Profile Overlap',
+                'An anomaly flag overlaps a Phase 3 churn-associated engagement profile.',
+                'Validate out of time, then test re-engagement / relationship-depth actions.',
+            )
+
         if row['Age'] < 22 and row['Balance'] > 50000:
-            return 'B: Rare Valid — Young High-Balance Customer'
+            return (
+                'B: Rare Legitimate — Young High-Balance Customer',
+                'Uncommon age/balance combination within documented bounds.',
+                'Verify and offer appropriate service; do not delete.',
+            )
         if row['NumOfProducts'] == 4:
-            return 'B: Rare Valid — Maximum Product Holder'
+            return (
+                'B: Rare Legitimate — Maximum Product Holder',
+                'Maximum observed product count but still inside the documented range.',
+                'Retain; review product suitability and service needs.',
+            )
+        return (
+            'B: Rare Legitimate — Statistical/Isolation Outlier',
+            'Flagged statistically or by Isolation Forest without structural risk-profile evidence.',
+            'Retain and monitor; investigate only if other business evidence emerges.',
+        )
 
-        return 'B: Rare Valid — Statistically Unusual Pattern'
+    classification = df_anomaly.apply(
+        classify_anomaly,
+        axis=1,
+        result_type='expand',
+    )
+    classification.columns = [
+        'Anomaly_Class', 'Anomaly_Evidence', 'Recommended_Action',
+    ]
+    df_anomaly[classification.columns] = classification
+    df_flagged = df_anomaly[candidate_mask].copy()
 
-    df_anomaly['Anomaly_Class'] = df_anomaly.apply(classify_anomaly, axis=1)
-    df_flagged = df_anomaly[df_anomaly['Composite_Anomaly_Score'] >= 1]
+    print(
+        f'── ANOMALY CLASSIFICATION REPORT '
+        f'(n={len(df_flagged):,} flagged records) ──'
+    )
+    class_summary = (
+        df_flagged.groupby('Anomaly_Class')
+        .agg(Count=('Exited', 'size'), Churn_Lens=('Exited', 'mean'))
+        .sort_index()
+    )
+    class_summary['% of Flagged'] = (
+        class_summary['Count'] / len(df_flagged) * 100
+    )
+    class_summary['Churn Lens (%)'] = class_summary['Churn_Lens'] * 100
+    display(class_summary[['Count', '% of Flagged', 'Churn Lens (%)']].round(1))
 
-    # ── Anomaly Classification Summary (flagged pool only) ────────────────────────
-    print(f"── ANOMALY CLASSIFICATION REPORT (n = {len(df_flagged):,} flagged records) ──")
-    class_counts = df_flagged['Anomaly_Class'].value_counts()
-    display(class_counts.rename('Count').to_frame()
-              .assign(**{'% of Flagged': (class_counts/len(df_flagged)*100).round(2)}))
+    print('\nExample evidence and action rows')
+    display(
+        df_flagged[
+            [
+                'Source_RowNumber', 'Anomaly_Class', 'Anomaly_Evidence',
+                'Recommended_Action', 'Composite_Anomaly_Score', 'Exited',
+            ]
+        ].groupby('Anomaly_Class', group_keys=False).head(2)
+    )
 
-    # Churn rate per class — Normal pool kept as the contrast row
-    print("\n── Churn Rate per Class (flagged classes vs. Normal pool) ──")
-    display(df_anomaly.groupby('Anomaly_Class')['Exited']
-              .agg(['mean','sum','count'])
-              .rename(columns={'mean':'Churn Rate','sum':'Churned Count','count':'N'})
-              .assign(**{'Churn Rate (%)': lambda x: (x['Churn Rate']*100).round(1)}))
-
-    print("""
-    ── ANOMALY REPORT LEGEND ──
-
-    NORMAL — Not Flagged:
-      Records flagged by zero detection methods. Outside the anomaly typology.
-
-    CLASS A — Data Error:
-      Records with feature values outside the domain-valid range.
-      Recommended Action: Flag for data quality review; exclude from business decisions.
-
-    CLASS B — Rare Legitimate Case:
-      Statistically unusual but plausible customer profiles.
-      Examples: Young customer with very high balance; 4-product holder.
-      Recommended Action: Monitor for churn risk; assign to premium service tier.
-
-    CLASS C — Risk Signal:
-      Behavioral patterns directly associated with churn probability.
-      Examples: High-balance customer who exited; Inactive single-product German customer.
-      Recommended Action: IMMEDIATE retention intervention; escalate to Relationship Manager.
-    """)
-
-    # ── Persist classified anomaly reports (overwrites the cell-36 saves, which
-    #    ran before Anomaly_Class existed — deliverable must include the class) ──
+    # Persist only after every candidate has a class and supporting evidence.
     df_anomaly.to_csv(ANOMALY_REPORT_PATH, index=False)
-    df_anomaly[df_anomaly['Composite_Anomaly_Score'] >= 3].to_csv(
-        HIGH_CONFIDENCE_ANOMALIES_PATH, index=False)
-    print("  ✔ Anomaly reports re-saved with Anomaly_Class column.")
+    df_anomaly[corroborated_mask].to_csv(
+        HIGH_CONFIDENCE_ANOMALIES_PATH,
+        index=False,
+    )
+    print('\n  Anomaly report and 2+ method corroborated subset saved to outputs/.')
 
 
-    # ### Reading the Classification Table Honestly — Two Caveats
-    # 
-    # 1. **Class C churn = 100% is by construction, not a discovery.** The risk-signal subtypes condition on `Exited = 1`: this is a *retrospective* typology ("among flagged anomalies, these are the patterns that in fact ended in churn"), using the churn label as the validation lens the project brief prescribes. The knowledge product is the *pattern templates* — high-balance pre-churn, disengaged single-product, senior high-value, density-outlier-churned — which a bank would monitor **prospectively** on live customers, where realistic hit rates are the Phase 3/4 lifts (≈2.5–3.8×), not 100%. The 100% figure must never be quoted as model performance.
-    # 2. **The two "Class A: Data Error" records (ages 91–92) pass Phase 1's validity window (18–100).** They break no hard domain rule; they are flagged under a stricter *plausibility* threshold (>90) as manual-review candidates. The honest label is "suspected data-entry issue — verify against source systems"; with n = 2, nothing downstream depends on the verdict. The two thresholds coexist deliberately: Phase 1's bound decides *admissibility*, this one flags *review priority*.
-    # 
-    # **What the table genuinely establishes:** over half the flagged pool (52%) consists of rare-but-valid customers churning at just 4.2% — *safer* than the unflagged population (17.7%) — mostly settled elderly and zero-balance profiles. Separating those benign rarities from the four evidence-backed risk-signal templates (and from suspected errors) is exactly the anomaly typology the rubric grades: flagging was the easy part; the classification is the deliverable.
+    # ### Reading the Classification Table Honestly
+    #
+    # The typology is assigned without consulting `Exited`. The churn label is
+    # reintroduced only after classification as a validation lens, so different
+    # class-level churn rates are observed associations rather than definitions.
+    # Class C identifies structural rarity or overlap with a Phase 3 profile; it
+    # is a human-review queue, not a predictive score or automatic decision rule.
+    # Ages above 90 remain within Phase 1's admissible 18–100 range and are routed
+    # to source verification as rare legitimate cases rather than called errors.
     # 
 
     # In[41]:
@@ -707,7 +762,7 @@ def run_phase4():
     )
     plt.colorbar(sc, ax=axes[0,1], label='Exited (1=Churned)')
     axes[0,1].set_title('Isolation Forest Score vs. Balance', fontweight='bold')
-    axes[0,1].set_xlabel('Account Balance (£)')
+    axes[0,1].set_xlabel('Account Balance (dataset units)')
     axes[0,1].set_ylabel('IF Anomaly Score (more negative = more anomalous)')
 
     # 3. Anomaly Class Churn Rate
@@ -760,8 +815,8 @@ def run_phase4():
     # **Finding 1: DBSCAN Noise Is the Strongest Churn-Risk Detector**  
     # DBSCAN flags 554 customers (5.54%) and their churn rate is 62.6%, more than 3x the full-dataset baseline of 20.4%. These outliers are older on average (mean age 51.3) and have high product depth (2.46 products), suggesting DBSCAN is catching unusual customer shapes rather than only simple high-balance cases.
     # 
-    # **Finding 2: High-Balance Pre-Churn Signal Remains Financially Important**  
-    # High-balance churners account for 592 records. Their average balance is about GBP 149.8K, and Germany contributes 46.3% of this group. The churn lift is modest (23.7% vs. 20.4% baseline), but the business impact is high because these are financially valuable departures.
+    # **Finding 2: The Retrospective High-Value Exited Subset Is Financially Important**
+    # High-balance customers observed as exited account for 592 records. Their average balance is about 149.8K in undocumented balance units, and Germany contributes 46.3% of this group. This is a value-at-risk profile from one snapshot, not evidence of a balance drop before closure.
     # 
     # **Finding 3: Structural and Statistical Methods Find Different Risk Types**  
     # Isolation Forest anomalies have a 49.0% churn rate, while IQR and Z-score mainly capture age and credit-score extremes. The strongest overlap is IF vs DBSCAN, so structural outliers should be prioritized when the business question is churn risk. IQR/Z-score are still useful for documenting rare valid cases and possible data-quality checks.
@@ -771,15 +826,11 @@ def run_phase4():
     # 
     # ### Classification Summary
     # 
-    # The typology is applied to the 876 records flagged by at least one anomaly method. Records no method flagged are labelled Normal and stay outside the anomaly report.
-    # 
-    # | Class | Count Among Flagged (n=876) | % of Flagged | Churn Rate | Description | Action |
-    # |---|---:|---:|---:|---|---|
-    # | A: Data Error | 2 | 0.2% | 0.0% | Values outside conservative domain bounds | Review manually before use in business decisions |
-    # | B: Rare Valid | 468 | 53.4% | 4.1% | Unusual but plausible customer profiles | Monitor; do not delete from discovery analysis |
-    # | C: Risk Signal | 406 | 46.3% | 100.0% | Churn-linked behavioral/financial patterns | Prioritize retention intervention |
-    # 
-    # **Largest subtypes:** 457 records are rare-but-valid statistical patterns, 221 are density outlier churners, 136 are high-balance pre-churn cases, and 44 are disengaged single-product churn cases. Class C has 100% churn because the classification rules deliberately define risk-signal subtypes using observed churn as supporting evidence, not because this is a predictive model.
+    # The typology is applied to records flagged by at least one core method.
+    # Records flagged by none remain Normal. Classes are assigned from domain
+    # validity, structural detector evidence, and Phase 3 profile overlap without
+    # consulting `Exited`; the outcome is summarized only afterward as a validation
+    # lens. Every exported record carries its evidence and recommended human action.
     # 
 
     # ## Final Milestone: KDD Knowledge Synthesis
@@ -830,7 +881,7 @@ def run_phase4():
     # 
     # 1. **Cross-sectional data, longitudinal question.** The assigned angle "sudden balance drops preceding closure" cannot be observed directly: the dataset is one snapshot per customer with no transaction history. Phase 4 therefore *proxies* the pre-closure signal as {high balance ∩ exited} — defensible, but a true drop-detector needs balance time series. This is the largest gap between the mining angle and what the data can support.
     # 2. **Weak geometric cluster structure.** All silhouettes are ≤ 0.164. The K=3 personas are operational segments of a continuum, validated by cross-algorithm stability (ARI 0.75) and large effect sizes on the defining features — not by natural separation. Claiming "three kinds of customers exist" would overstate the evidence; "three useful, stable, business-distinct segments" is what the data supports.
-    # 3. **Churn-conditioned constructs are retrospective.** Class C anomaly rates (100%) and rule confidences (52–77%) describe this historical snapshot. Deployed prospectively, expect regression toward the lift values; senior-band rules may also partly reflect this snapshot's cohort mix rather than a stable aging effect.
+    # 3. **Outcome validation is retrospective.** Anomaly classes are assigned without `Exited`; class-level churn rates and rule confidences describe overlap in this historical snapshot. Any prospective use requires out-of-time validation and controlled testing.
     # 4. **Discretization sensitivity (Phase 3).** Rules depend on bin boundaries. Bands are anchored to external standards where they exist — FICO score bands for CreditScore, Eurostat/UN age conventions, and the EUR 100,000 EU deposit-guarantee ceiling (Directive 2014/49/EU) for Balance — rather than tuned toward desired rules. The balance banding was revised once, transparently: the original unanchored 50K/125K scheme produced a sub-support dead item (Low band, 0.75%) and split the above-ceiling risk pattern across two bands. Re-binning on the regulatory anchor changed the churn-rule count from 13 to 17 and reversed one conclusion (“the bank retains the wealthy” → “uninsured excess is the most flight-prone money”). The episode is itself evidence of binning sensitivity: boundaries must be justified externally, because they determine which patterns Apriori can represent.
     # 5. **No causal claims.** Germany's 2× churn, the female gap, and the senior effect are associations in one bank's book over one period; competitive, macroeconomic, and service-quality explanations are indistinguishable here. The correct business response is targeted investigation and A/B-tested retention offers, not blanket policy.
     # 6. **Method-setting residue.** DBSCAN rests on one (eps, minPts) pair chosen by a noise-target heuristic; Isolation Forest and LOF counts are set by contamination = 5%. Sensitivity was reported (eps sweep; Mahalanobis at 99% vs. 99.9%), but all anomaly counts should be read as "under the stated settings."

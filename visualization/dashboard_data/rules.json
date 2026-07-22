@@ -5,12 +5,12 @@
    "letter": "A",
    "if_items": [
     "1 product only",
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Inactive member"
    ],
    "if_raw": [
     "Active_Status_Inactive",
-    "Age_Band_Senior",
+    "Age_Band_Age_46_to_60",
     "Products_Label_Products_1"
    ],
    "then": "Churned",
@@ -19,20 +19,20 @@
    "lift": 3.794,
    "conviction": 3.506,
    "customers": 405,
-   "commentary": "The single strongest churn profile found. Inactive seniors holding only one product churn at ~77% - nearly 4x the 20.4% base rate. Action: proactive retention call before a second consecutive inactive quarter, plus a bundled-product offer."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, inactive customers, single-product relationships. Next step: test a re-engagement contact; test a relevant second-product offer; do not treat the rule as causal."
   },
   {
    "rank": 2,
    "letter": "B",
    "if_items": [
-    "Above DGS ceiling (>100K)",
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K",
+    "Inactive member"
    ],
    "if_raw": [
     "Active_Status_Inactive",
-    "Age_Band_Senior",
-    "Balance_Band_Above_DGS_Ceiling"
+    "Age_Band_Age_46_to_60",
+    "Balance_Band_Balance_Above_100K"
    ],
    "then": "Churned",
    "support_pct": 3.13,
@@ -40,18 +40,18 @@
    "lift": 3.565,
    "conviction": 2.909,
    "customers": 313,
-   "commentary": "New with the DGS-anchored binning: inactive seniors holding more than the EUR 100K deposit-guarantee ceiling churn at 72.6%. Money above the state guarantee is the most mobile money in the book - the highest-priority relationship-manager list."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, inactive customers, balances above the 100K scenario cut. Next step: test a re-engagement contact; prioritize relationship-manager review while sensitivity-testing the threshold; do not treat the rule as causal."
   },
   {
    "rank": 3,
    "letter": "C",
    "if_items": [
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Inactive member"
    ],
    "if_raw": [
     "Active_Status_Inactive",
-    "Age_Band_Senior"
+    "Age_Band_Age_46_to_60"
    ],
    "then": "Churned",
    "support_pct": 5.38,
@@ -59,38 +59,17 @@
    "lift": 3.356,
    "conviction": 2.517,
    "customers": 538,
-   "commentary": "Inactivity alone is a much weaker signal - it is the AGE interaction that drives risk. Seniors who go quiet tend to disengage permanently, while younger inactive customers often re-engage on their own."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, inactive customers. Next step: test a re-engagement contact; do not treat the rule as causal."
   },
   {
    "rank": 4,
    "letter": "D",
    "if_items": [
-    "Has credit card",
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Germany"
    ],
    "if_raw": [
-    "Active_Status_Inactive",
-    "Age_Band_Senior",
-    "CrCard_Status_Has_CrCard"
-   ],
-   "then": "Churned",
-   "support_pct": 3.78,
-   "confidence_pct": 67.6,
-   "lift": 3.32,
-   "conviction": 2.459,
-   "customers": 378,
-   "commentary": "Holding a credit card does not protect inactive seniors at all - the card is a shallow anchor. Risk is essentially identical to the card-free version of this profile."
-  },
-  {
-   "rank": 5,
-   "letter": "E",
-   "if_items": [
-    "Germany",
-    "Senior (46-60)"
-   ],
-   "if_raw": [
-    "Age_Band_Senior",
+    "Age_Band_Age_46_to_60",
     "Geography_Germany"
    ],
    "then": "Churned",
@@ -99,18 +78,18 @@
    "lift": 3.305,
    "conviction": 2.437,
    "customers": 338,
-   "commentary": "German seniors churn at >3x baseline regardless of activity or product count. It points to a product-fit or service-quality issue specific to the German operation, not just an age effect."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, the German book. Next step: audit local service and product-fit drivers; do not treat the rule as causal."
   },
   {
-   "rank": 6,
-   "letter": "F",
+   "rank": 5,
+   "letter": "E",
    "if_items": [
     "1 product only",
-    "Female",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Female"
    ],
    "if_raw": [
-    "Age_Band_Senior",
+    "Age_Band_Age_46_to_60",
     "Gender_Female",
     "Products_Label_Products_1"
    ],
@@ -120,17 +99,17 @@
    "lift": 3.263,
    "conviction": 2.374,
    "customers": 323,
-   "commentary": "A gender-age interaction invisible in simple cross-tabs: female seniors with a single product churn at 66%. Combine cross-sell with age-appropriate engagement."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, single-product relationships, female customers. Next step: test a relevant second-product offer; investigate experience differences with fairness safeguards; do not treat the rule as causal."
   },
   {
-   "rank": 7,
-   "letter": "G",
+   "rank": 6,
+   "letter": "F",
    "if_items": [
     "1 product only",
-    "Senior (46-60)"
+    "Age 46-60"
    ],
    "if_raw": [
-    "Age_Band_Senior",
+    "Age_Band_Age_46_to_60",
     "Products_Label_Products_1"
    ],
    "then": "Churned",
@@ -139,60 +118,18 @@
    "lift": 2.99,
    "conviction": 2.037,
    "customers": 606,
-   "commentary": "Single-product seniors churn at 61%. Cross-sell is the obvious lever - and the data shows the bank has historically failed to deepen exactly this segment."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, single-product relationships. Next step: test a relevant second-product offer; do not treat the rule as causal."
   },
   {
-   "rank": 8,
-   "letter": "H",
+   "rank": 7,
+   "letter": "G",
    "if_items": [
-    "1 product only",
-    "Has credit card",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K"
    ],
    "if_raw": [
-    "Age_Band_Senior",
-    "CrCard_Status_Has_CrCard",
-    "Products_Label_Products_1"
-   ],
-   "then": "Churned",
-   "support_pct": 4.18,
-   "confidence_pct": 59.9,
-   "lift": 2.94,
-   "conviction": 1.985,
-   "customers": 418,
-   "commentary": "A credit card does NOT reduce churn risk for single-product seniors. Card-only relationships are shallow relationships."
-  },
-  {
-   "rank": 9,
-   "letter": "I",
-   "if_items": [
-    "1 product only",
-    "Above DGS ceiling (>100K)",
-    "Senior (46-60)"
-   ],
-   "if_raw": [
-    "Age_Band_Senior",
-    "Balance_Band_Above_DGS_Ceiling",
-    "Products_Label_Products_1"
-   ],
-   "then": "Churned",
-   "support_pct": 3.51,
-   "confidence_pct": 59.6,
-   "lift": 2.926,
-   "conviction": 1.971,
-   "customers": 351,
-   "commentary": "Single-product seniors above the insured ceiling - high-value, shallow-anchored, uninsured excess: the costliest churn profile per customer."
-  },
-  {
-   "rank": 10,
-   "letter": "J",
-   "if_items": [
-    "Above DGS ceiling (>100K)",
-    "Senior (46-60)"
-   ],
-   "if_raw": [
-    "Age_Band_Senior",
-    "Balance_Band_Above_DGS_Ceiling"
+    "Age_Band_Age_46_to_60",
+    "Balance_Band_Balance_Above_100K"
    ],
    "then": "Churned",
    "support_pct": 4.89,
@@ -200,15 +137,78 @@
    "lift": 2.834,
    "conviction": 1.884,
    "customers": 489,
-   "commentary": "Seniors above the EUR 100K ceiling churn at 57.7% (~3x baseline). Under the old 50-125K binning this pattern was split across two bands and read as 'the bank retains the wealthy' - the regulatory boundary reverses that conclusion: uninsured excess is the most flight-prone money."
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, balances above the 100K scenario cut. Next step: prioritize relationship-manager review while sensitivity-testing the threshold; do not treat the rule as causal."
+  },
+  {
+   "rank": 8,
+   "letter": "H",
+   "if_items": [
+    "Age 46-60",
+    "Female"
+   ],
+   "if_raw": [
+    "Age_Band_Age_46_to_60",
+    "Gender_Female"
+   ],
+   "then": "Churned",
+   "support_pct": 4.71,
+   "confidence_pct": 57.3,
+   "lift": 2.813,
+   "conviction": 1.865,
+   "customers": 471,
+   "commentary": "Association concentrates among the dataset's age 46\u201360 band, female customers. Next step: investigate experience differences with fairness safeguards; do not treat the rule as causal."
+  },
+  {
+   "rank": 9,
+   "letter": "I",
+   "if_items": [
+    "1 product only",
+    "Balance above 100K",
+    "Germany",
+    "Inactive member"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Balance_Band_Balance_Above_100K",
+    "Geography_Germany",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 3.27,
+   "confidence_pct": 55.7,
+   "lift": 2.735,
+   "conviction": 1.798,
+   "customers": 327,
+   "commentary": "Association concentrates among inactive customers, single-product relationships, the German book, balances above the 100K scenario cut. Next step: test a re-engagement contact; test a relevant second-product offer; audit local service and product-fit drivers; prioritize relationship-manager review while sensitivity-testing the threshold; do not treat the rule as causal."
+  },
+  {
+   "rank": 10,
+   "letter": "J",
+   "if_items": [
+    "1 product only",
+    "Germany",
+    "Inactive member"
+   ],
+   "if_raw": [
+    "Active_Status_Inactive",
+    "Geography_Germany",
+    "Products_Label_Products_1"
+   ],
+   "then": "Churned",
+   "support_pct": 3.75,
+   "confidence_pct": 52.1,
+   "lift": 2.557,
+   "conviction": 1.662,
+   "customers": 375,
+   "commentary": "Association concentrates among inactive customers, single-product relationships, the German book. Next step: test a re-engagement contact; test a relevant second-product offer; audit local service and product-fit drivers; do not treat the rule as causal."
   }
  ],
  "all_churn_rules": [
   {
    "if_items": [
     "1 product only",
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Inactive member"
    ],
    "support_pct": 4.05,
    "confidence_pct": 77.3,
@@ -216,18 +216,9 @@
   },
   {
    "if_items": [
-    "Inactive member",
-    "Senior (46-60)"
-   ],
-   "support_pct": 4.05,
-   "confidence_pct": 51.5,
-   "lift": 3.652
-  },
-  {
-   "if_items": [
-    "Above DGS ceiling (>100K)",
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K",
+    "Inactive member"
    ],
    "support_pct": 3.13,
    "confidence_pct": 72.6,
@@ -235,8 +226,8 @@
   },
   {
    "if_items": [
-    "Inactive member",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Inactive member"
    ],
    "support_pct": 5.38,
    "confidence_pct": 68.4,
@@ -244,9 +235,9 @@
   },
   {
    "if_items": [
+    "Age 46-60",
     "Has credit card",
-    "Inactive member",
-    "Senior (46-60)"
+    "Inactive member"
    ],
    "support_pct": 3.78,
    "confidence_pct": 67.6,
@@ -254,8 +245,8 @@
   },
   {
    "if_items": [
-    "Germany",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Germany"
    ],
    "support_pct": 3.38,
    "confidence_pct": 67.3,
@@ -264,8 +255,8 @@
   {
    "if_items": [
     "1 product only",
-    "Female",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Female"
    ],
    "support_pct": 3.23,
    "confidence_pct": 66.5,
@@ -274,7 +265,7 @@
   {
    "if_items": [
     "1 product only",
-    "Senior (46-60)"
+    "Age 46-60"
    ],
    "support_pct": 6.06,
    "confidence_pct": 60.9,
@@ -283,8 +274,8 @@
   {
    "if_items": [
     "1 product only",
-    "Has credit card",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Has credit card"
    ],
    "support_pct": 4.18,
    "confidence_pct": 59.9,
@@ -293,8 +284,8 @@
   {
    "if_items": [
     "1 product only",
-    "Above DGS ceiling (>100K)",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K"
    ],
    "support_pct": 3.51,
    "confidence_pct": 59.6,
@@ -302,8 +293,8 @@
   },
   {
    "if_items": [
-    "Above DGS ceiling (>100K)",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K"
    ],
    "support_pct": 4.89,
    "confidence_pct": 57.7,
@@ -311,8 +302,8 @@
   },
   {
    "if_items": [
-    "Female",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Female"
    ],
    "support_pct": 4.71,
    "confidence_pct": 57.3,
@@ -320,9 +311,9 @@
   },
   {
    "if_items": [
-    "Above DGS ceiling (>100K)",
-    "Has credit card",
-    "Senior (46-60)"
+    "Age 46-60",
+    "Balance above 100K",
+    "Has credit card"
    ],
    "support_pct": 3.34,
    "confidence_pct": 56.7,
@@ -331,7 +322,7 @@
   {
    "if_items": [
     "1 product only",
-    "Above DGS ceiling (>100K)",
+    "Balance above 100K",
     "Germany",
     "Inactive member"
    ],
@@ -341,9 +332,9 @@
   },
   {
    "if_items": [
+    "Age 46-60",
     "Female",
-    "Has credit card",
-    "Senior (46-60)"
+    "Has credit card"
    ],
    "support_pct": 3.14,
    "confidence_pct": 55.3,
@@ -361,7 +352,7 @@
   },
   {
    "if_items": [
-    "Senior (46-60)"
+    "Age 46-60"
    ],
    "support_pct": 8.42,
    "confidence_pct": 51.1,
@@ -373,6 +364,6 @@
   "min_confidence": 0.5,
   "min_lift": 1.5
  },
- "n_total_rules": 645,
- "n_churn_rules": 17
+ "n_total_rules": 613,
+ "n_churn_rules": 16
 }

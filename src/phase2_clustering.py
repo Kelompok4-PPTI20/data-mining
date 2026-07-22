@@ -156,7 +156,7 @@ def run_phase2():
     # 
     # The two required validity criteria point at different K:
     # 
-    # - **Silhouette peaks at K=2 (0.1639).** Refitting K=2 for inspection shows what that partition is: one cluster with 86% zero-balance accounts (n≈4,200) versus one positive-balance cluster (mean ≈ £123K, n≈5,800) — i.e., the bimodal Balance column restated. Geometrically "best", informationally almost tautological.
+    # - **Silhouette peaks at K=2 (0.1639).** Refitting K=2 for inspection shows what that partition is: one cluster with 86% zero-balance accounts (n≈4,200) versus one positive-balance cluster (mean ≈ 123K dataset units, n≈5,800) — i.e., the bimodal Balance column restated. Geometrically "best", informationally almost tautological.
     # - **The elbow has no sharp knee**: inertia falls 54.4K → 49.6K → 45.7K → 42.7K with smoothly shrinking increments (−4.9K, −3.9K, −3.0K). Diminishing returns set in around K = 3–5 rather than at one obvious break.
     # - **The absolute level matters more than the argmax:** silhouettes of 0.13–0.16 *at every K* say this data contains no well-separated spherical islands — consistent with the near-orthogonal correlation structure from Phase 1. Customers form a continuum; any K partitions it into *operational segments*, not natural species.
     # 
@@ -214,6 +214,12 @@ def run_phase2():
     OPTIMAL_K = 3
 
     df_original = df.copy()
+    source_row_numbers = pd.read_csv(RAW_PATH, usecols=['RowNumber'])['RowNumber']
+    if len(source_row_numbers) != len(df_original):
+        raise ValueError(
+            'Raw and clean row counts differ; source-row traceability is unsafe.'
+        )
+    df_original.insert(0, 'Source_RowNumber', source_row_numbers.to_numpy())
     df_original['Cluster'] = km_models[OPTIMAL_K].labels_
 
     # Cluster Profile Table
@@ -258,6 +264,14 @@ def run_phase2():
     print("\n-- Gender Composition per Cluster (%) --")
     display(gender_dist)
 
+    # Name geography using enrichment relative to the whole customer book. The
+    # largest within-cluster share can still be under-represented when one
+    # country dominates the dataset, so raw majority share is not enough.
+    geo_baseline = df_original['Geography'].value_counts(normalize=True)
+    geo_enrichment = (geo_dist.div(100)).div(geo_baseline, axis=1).round(2)
+    print("\n-- Geography Enrichment Ratio (cluster share / population share) --")
+    display(geo_enrichment)
+
     # Business Profile Naming
     # Names are generated from the post-cluster profile so they stay honest after
     # the distance matrix changes. Naming tokens are restricted to dimensions the
@@ -289,8 +303,8 @@ def run_phase2():
         else:
             product_label = 'Low-Product-Depth'
 
-        dominant_geo = geo_dist.loc[k].idxmax()
-        geo_label = f'{dominant_geo}-Skew'
+        enriched_geo = geo_enrichment.loc[k].idxmax()
+        geo_label = f'{enriched_geo}-Enriched'
         churn_rate = profile.loc[k, 'Churn_Rate_%']
         if churn_rate >= baseline_churn + 3:
             risk_label = 'Watchlist'
@@ -647,6 +661,15 @@ def run_phase2():
     distances, _ = nbrs.kneighbors(X_dbscan_knn)
     k_distances  = np.sort(distances[:, -1])
 
+    # Deterministic k-distance knee: maximum deviation from the endpoint chord.
+    # This chooses eps from density geometry instead of imposing a noise target.
+    x_norm = np.linspace(0.0, 1.0, len(k_distances))
+    y_range = k_distances[-1] - k_distances[0]
+    y_norm = ((k_distances - k_distances[0]) / y_range
+              if y_range > 0 else np.zeros_like(k_distances))
+    knee_index = int(np.argmax(x_norm - y_norm))
+    KNEE_EPS = float(k_distances[knee_index])
+
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(k_distances, color='steelblue', linewidth=1.5)
     ax.set_title(f'DBSCAN: k-NN Distance Plot (k={MIN_SAMPLES})\n'
@@ -661,12 +684,17 @@ def run_phase2():
         if idx < len(k_distances):
             ax.axhline(eps_candidate, linestyle='--', alpha=0.35,
                        label=f'eps = {eps_candidate}')
+    ax.axvline(knee_index, color='black', linestyle=':',
+               label=f'knee index={knee_index:,}')
+    ax.axhline(KNEE_EPS, color='black', linewidth=1.5,
+               label=f'knee eps={KNEE_EPS:.3f}')
     ax.legend(ncol=2, fontsize=8)
     plt.tight_layout()
 
     plt.show()
 
-    print(f"  Suggested epsilon candidates to test: {EPSILON_CANDIDATES}")
+    print(f"  Detected k-distance knee: eps={KNEE_EPS:.4f} at sorted index {knee_index:,}")
+    print(f"  Candidate values tested around the knee: {EPSILON_CANDIDATES}")
     print(f"  MinSamples = {MIN_SAMPLES} (heuristic: ln(n) = ln(10,000) ~= 9.2, rounded up)")
 
 
@@ -674,10 +702,9 @@ def run_phase2():
 
 
     # DBSCAN Execution
-    # Removing OHE changes the Euclidean distance scale, so epsilon is selected from
-    # a small candidate sweep instead of reusing the old OHE-matrix value blindly.
+    # Removing OHE changes the Euclidean distance scale, so epsilon is selected as
+    # the tested value nearest the detected k-distance knee.
     MIN_SAMPLES = 10
-    TARGET_NOISE_PCT = 8.0
 
     dbscan_summaries = []
     for eps in EPSILON_CANDIDATES:
@@ -693,20 +720,21 @@ def run_phase2():
         })
 
     dbscan_grid = pd.DataFrame(dbscan_summaries)
-    dbscan_grid['Distance_From_Target_%'] = (dbscan_grid['Noise_%'] - TARGET_NOISE_PCT).abs()
+    dbscan_grid['Distance_From_Knee'] = (dbscan_grid['EPSILON'] - KNEE_EPS).abs()
     print("-- DBSCAN Epsilon Candidate Sweep --")
-    display(dbscan_grid.drop(columns='Distance_From_Target_%'))
+    display(dbscan_grid)
 
     valid_eps = dbscan_grid[dbscan_grid['Clusters'] >= 1].copy()
     if valid_eps.empty:
         raise ValueError("All tested DBSCAN eps values produced no clusters. Expand EPSILON_CANDIDATES.")
 
-    selected_row = valid_eps.sort_values(['Distance_From_Target_%', 'Clusters']).iloc[0]
+    selected_row = valid_eps.sort_values(['Distance_From_Knee', 'Clusters']).iloc[0]
     EPSILON = float(selected_row['EPSILON'])
 
-    print(f"\n  Selected eps={EPSILON} because its noise rate "
-          f"({selected_row['Noise_%']:.2f}%) is closest to the target "
-          f"{TARGET_NOISE_PCT:.1f}% while retaining at least one dense cluster.")
+    print(f"\n  Selected eps={EPSILON} as the tested value nearest the detected "
+          f"k-distance knee ({KNEE_EPS:.4f}) while retaining a dense cluster. "
+          f"The resulting noise rate ({selected_row['Noise_%']:.2f}%) is an "
+          "output, not a target imposed in advance.")
 
     dbscan = DBSCAN(eps=EPSILON, min_samples=MIN_SAMPLES, metric='euclidean', n_jobs=-1)
     dbscan_labels = dbscan.fit_predict(X_cl)
@@ -750,7 +778,7 @@ def run_phase2():
 
     # ### Interpretation — DBSCAN Sees a Different Structure, and Why That Is Not a Contradiction
     # 
-    # - **The eps sweep brackets a narrow workable window.** At eps = 0.8 half the dataset is "noise" (31 fragments — over-segmentation); by eps = 2.0 everything merges into one cluster with 0.1% noise. Between those extremes only eps ≈ 1.0–1.5 gives a usable structure; 1.25 is selected by the pre-registered noise-target rule (~8%), not by peeking at churn outcomes.
+    # - **The eps sweep brackets a narrow workable window.** At eps = 0.8 half the dataset is "noise" (31 fragments — over-segmentation); by eps = 2.0 everything merges into one cluster with 0.1% noise. Between those extremes only eps ≈ 1.0–1.5 gives a usable structure; 1.25 is the tested value nearest the detected 10-NN distance knee. Churn is inspected only after selection.
     # - **DBSCAN's two dense cores are the product-count split, not the K-Means personas.** Core 0 (4,966 records) is the 1-product population (mean products exactly 1.00); Core 1 (4,466) the 2-product population (mean 2.00). Because NumOfProducts is discrete, the space between "1" and "2" in scaled coordinates is a genuine density valley — precisely what a density method finds first. K-Means, minimizing variance across all dimensions, splits on Balance instead. **The two algorithms disagree because they optimize different definitions of "group" — centroid compactness vs. density connectivity. The disagreement is structural and expected, not an error**, and comparing their answers is more informative than either alone.
     # - **The 14-record micro-cluster is DBSCAN's signature move:** all 14 are zero-balance, 3-product holders (churn 57%) — a tiny, internally identical pocket that K-Means silently absorbs into a larger segment. Only a density method can isolate a group this small.
     # - **The noise set is the real deliverable: 554 customers (5.5%) churning at 62.6% — 3.1× baseline.** These sit in *sparse regions* of behavior space: unusual combinations of age (mean 51.3 vs. book 38.9), product depth (mean 2.46), and balance. This is the strongest anomaly–churn association any method in this project produces, and it feeds directly into Phase 4's cross-referencing requirement.
@@ -821,9 +849,9 @@ def run_phase2():
     # 
     # | Cluster ID | Business Name | Size | Churn Rate | Key Characteristics |
     # |---|---|---:|---:|---|
-    # | 0 | **High-Balance Multi-Product Germany-Skew Mixed-Risk** | 2,169 (21.7%) | 21.8% | High balance average (GBP 120.5K), highest product breadth (2.13), active rate 52.0%, Germany over-represented at 52.4%. Churn is slightly above baseline but not the strongest watchlist group. |
-    # | 1 | **High-Balance Single-Product France-Skew Watchlist** | 4,168 (41.7%) | 25.6% | High balance average (GBP 120.1K), exactly 1.00 product on average, active rate 51.0%, France is largest at 45.6%. This is the highest-churn K-Means segment. |
-    # | 2 | **Zero-Balance Multi-Product France-Skew Loyalist** | 3,663 (36.6%) | 13.6% | Near-zero balance average (GBP 0.7K; 98.4% of the cluster holds a zero balance), broader product relationship (1.78), active rate 52.0%, France/Spain-heavy with Germany almost absent (0.7%). Lowest churn segment. |
+    # | 0 | **High-Balance Multi-Product Germany-Enriched Mixed-Risk** | 2,169 (21.7%) | 21.8% | High average balance (120.5K balance units), highest product breadth (2.13), and Germany enriched relative to its full-book share. Churn is slightly above baseline but not the strongest watchlist group. |
+    # | 1 | **High-Balance Single-Product Germany-Enriched Watchlist** | 4,168 (41.7%) | 25.6% | High average balance (120.1K balance units), exactly 1.00 product on average, and Germany over-represented despite France retaining the largest raw share. This is the highest-churn K-Means segment. |
+    # | 2 | **Zero-Balance Multi-Product Spain-Enriched Loyalist** | 3,663 (36.6%) | 13.6% | Near-zero average balance (0.7K balance units; 98.4% zero balance), broader product relationships, and Spain slightly more enriched than France relative to baseline. Lowest churn segment. |
     # 
     # **Optimal-K Evidence (Elbow + Silhouette, both interpreted):** The elbow curve falls smoothly from 54.4K inertia at K=2 to 31.8K at K=12 with no sharp kink; the marginal inertia drop shrinks steadily (−4.9K going 2→3, −3.9K going 3→4, −3.0K going 4→5), signalling diminishing returns rather than one obvious break. The silhouette peaks at K=2 (0.1639) and declines gently thereafter. Read together, the two metrics say the data has weak global cluster structure with a defensible working range of K=2–4; K=3 is selected inside that range because it yields the most interpretable personas without over-splitting.
     # 
