@@ -202,7 +202,8 @@ def persona_card(k):
     return html.Div(html.Div([
         html.Div([html.Span(f"CLUSTER {k}", style={"color": color}),
                   chip(risk_label, risk_kind)], className="persona-overline"),
-        html.Div(c["name"], className="persona-name"),
+        html.Div(c["alias"], className="persona-name"),
+        html.Div(c["name"], className="persona-descriptor"),
         html.Div(PERSONA_TAGLINE[k], className="persona-tag"),
         html.Div([html.Div([html.Div(v, className="pstat-v"), html.Div(l, className="pstat-l")])
                   for v, l in stats], className="persona-stats"),

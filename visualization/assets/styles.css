@@ -410,6 +410,9 @@ button {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .persona-name { font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; margin: 8px 0 4px; }
+.persona-descriptor {
+  font-size: 11px; color: var(--ink-500); line-height: 1.4; margin-bottom: 7px;
+}
 .persona-tag { font-size: 12.5px; color: var(--ink-500); line-height: 1.55; margin-bottom: 14px; }
 .persona-stats {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;

@@ -32,6 +32,24 @@ CLASS_COUNTS = {
     prefix: sum(row["n"] for row in M["anomaly_classes"] if row["cls"].startswith(prefix))
     for prefix in ("A", "B", "C")
 }
+CONSENSUS_REVIEW_N = sum(
+    row["n"] for row in M["anomaly_classes"]
+    if "IF + DBSCAN Consensus" in row["cls"]
+)
+SOURCE_VERIFICATION_N = sum(
+    row["n"] for row in M["anomaly_classes"]
+    if "Source Verification Recommended" in row["cls"]
+)
+IF_DBSCAN_PAIR = next(
+    row for row in M["pairwise"] if row["pair"] == "IF vs DBSCAN"
+)
+NOISE_SHARE_BY_CLUSTER = {
+    int(k): M["cross_ref"]["noise_by_cluster"].get(k, 0)
+    / M["clusters"][k]["n"] * 100
+    for k in M["clusters"]
+}
+NOISE_HIGHEST_CLUSTER = max(NOISE_SHARE_BY_CLUSTER, key=NOISE_SHARE_BY_CLUSTER.get)
+NOISE_LOWEST_CLUSTER = min(NOISE_SHARE_BY_CLUSTER, key=NOISE_SHARE_BY_CLUSTER.get)
 
 app = Dash(
     __name__,
@@ -85,13 +103,17 @@ overview = html.Div([
     ], className="hero"),
 
     C.statband([
-        stat("10,000", "Customers analyzed", "14 raw features · France · Germany · Spain"),
-        stat(f"{BASELINE:.1f}%", "Baseline churn", "2,037 left; the yardstick for every "
+        stat(f"{M['kpi']['n_customers']:,}", "Customers analyzed",
+             f"{M['kpi']['n_features_raw']} raw features · France · Germany · Spain"),
+        stat(f"{BASELINE:.1f}%", "Baseline churn",
+             f"{M['kpi']['n_churned']:,} left; the yardstick for every "
              "number here", tone=T.CRITICAL, primary=True),
-        stat("3", "Customer personas", "found by clustering, method-stable (ARI 0.75)"),
-        stat(f"{M['kpi']['n_churn_rules']}", "Documented churn rules",
+        stat(f"{M['kpi']['n_clusters']}", "Customer personas",
+             f"found by clustering, method-stable "
+             f"(ARI {M['validation']['ari_kmeans_ward']:.2f})"),
+        stat(f"{M['kpi']['n_documented_churn_rules']}", "Documented churn rules",
              "non-redundant · all ≥ 2.5× baseline · top rule 3.79×"),
-        stat("876", "Anomalies triaged",
+        stat(f"{M['kpi']['n_flagged']:,}", "Anomalies triaged",
              f"{CLASS_COUNTS['C']} risk signals · {CLASS_COUNTS['B']} rare-valid · "
              f"{CLASS_COUNTS['A']} data errors"),
     ]),
@@ -122,9 +144,10 @@ overview = html.Div([
         card("04 · Risk hides in combinations, not extremes",
              "Churn rate by type of statistical unusualness (Phase 4)",
              C.graph(F.OV_COMBO),
-             insight(["Customers flagged ONLY as unusual combinations of individually normal "
-                      "values churn at 45.3%; single-value extremes are largely benign "
-                      "(24.7%). ", html.B("Monitoring columns one at a time structurally "
+              insight(["Customers flagged ONLY as unusual combinations of individually normal "
+                       f"values churn at {M['uni_mv']['churn_pct'][3]:.1f}%; single-value "
+                       f"extremes are largely benign ({M['uni_mv']['churn_pct'][1]:.1f}%). ",
+                       html.B("Monitoring columns one at a time structurally "
                       "cannot see the riskiest customers"), "."], kind="warn")),
     ], className="grid g2"),
 
@@ -234,8 +257,10 @@ phase2 = html.Div([
          insight(["K-Means and Ward find nearly the same three segments (ARI 0.75) ordered "
                   "along PC1: single-product high-balance → multi-product high-balance → "
                   "zero-balance. DBSCAN instead splits on the density valley between 1 and 2 "
-                  "products and isolates 554 'noise' customers (red ✕); ", html.B(
-                      "those noise customers churn at 62.6%, the strongest anomaly-churn "
+                  f"products and isolates {M['kpi']['dbscan_noise']:,} 'noise' customers "
+                  "(red ✕); ", html.B(
+                      f"those noise customers churn at {M['dbscan']['noise_churn']:.1f}%, "
+                      "the strongest anomaly-churn "
                       "signal in the whole project"), " (picked up again in Phase 4). The "
                   "banded look is real data: products only take 4 discrete values."])),
 
@@ -308,7 +333,7 @@ hyp = M["hypothesis"]
 phase3 = html.Div([
     C.page_header(
         "PHASE 3 OF 5 · ASSOCIATION RULE MINING",
-        f"{M['kpi']['n_churn_rules']} rules that more than double churn risk",
+        f"{M['kpi']['n_documented_churn_rules']} rules that more than double churn risk",
         "Apriori on domain-anchored bins; support, confidence and lift computed for "
         "every rule, filtered to the non-trivial, high-lift findings.",
         chips=["min support 3%", "confidence ≥ 50%", "lift ≥ 1.5"]),
@@ -344,9 +369,11 @@ phase3 = html.Div([
 
     callout(["With a 20.4% base rate, demanding confidence ≥ 50% mathematically forces lift "
              "≥ 2.45, so ", html.B("every rule that survived more than doubles churn risk"),
-             ". The transparent funnel separates 45,820 generated rules from 613 passing "
-             "confidence/lift/leakage guards, 16 single-churn-consequent candidates, and 11 "
-             "non-redundant churn rules. The 100K balance band is a currency-neutral scenario "
+             f". The transparent funnel separates {M['kpi']['n_rules_generated']:,} generated "
+             f"rules from {M['kpi']['n_rules_filtered']:,} passing confidence/lift/leakage "
+             f"guards, {R['n_single_churn_consequent_rules']} exact single-churn-consequent "
+             f"candidates, and {M['kpi']['n_nonredundant_churn_rules']} non-redundant churn "
+             "rules. The 100K balance band is a currency-neutral scenario "
              "cut because the source does not document currency or insurance status."],
             title="Why so few rules survive"),
 
@@ -409,7 +436,9 @@ phase4 = html.Div([
         chips=["IQR + Z-score", "Isolation Forest", "cross-referenced with Phase 2"]),
 
     C.statband([
-        stat("876", "Customers flagged", "by ≥ 1 of the 4 core methods (8.8% of book)",
+        stat(f"{M['kpi']['n_flagged']:,}", "Customers flagged",
+             f"by ≥ 1 of the 4 core methods "
+             f"({M['kpi']['n_flagged'] / M['kpi']['n_customers'] * 100:.1f}% of book)",
              primary=True),
         stat(f"{CLASS_COUNTS['C']}", "Risk signals (C)",
              "structural/ARM evidence → human review and treatment testing",
@@ -419,7 +448,8 @@ phase4 = html.Div([
              tone=T.WARNING),
         stat(f"{CLASS_COUNTS['A']}", "Data errors (A)",
              "none violate the documented domain rules"),
-        stat("336", "IF ∩ DBSCAN overlap", "two structural methods agreeing · κ = 0.617"),
+        stat(f"{M['cross_ref']['if_dbscan_overlap']:,}", "IF ∩ DBSCAN overlap",
+             f"two structural methods agreeing · κ = {IF_DBSCAN_PAIR['kappa']:.3f}"),
     ]),
 
     section("Six detectors, systematically compared"),
@@ -451,9 +481,12 @@ phase4 = html.Div([
              f"{u['mv_only_hidden']} ({u['mv_only_hidden_pct']:.0f}%) have NO single value "
              "beyond |z| = 3; every number looks normal; only the combination is rare.",
              C.graph(F.UNIMV_FIG),
-             insight(["The two families barely overlap (Jaccard 0.21, κ 0.31) because they "
-                      "ask different questions. The risk gradient is 18.6% → 24.7% → 45.3%; "
-                      "shows churn concentrating exactly in the anomalies univariate screens ",
+              insight(["The two families barely overlap (Jaccard 0.21, κ 0.31) because they "
+                       "ask different questions. Across neither, univariate-only, and "
+                       f"multivariate-only customers, churn is {u['churn_pct'][0]:.1f}% → "
+                       f"{u['churn_pct'][1]:.1f}% → {u['churn_pct'][3]:.1f}%; the separate "
+                       f"both-families group is {u['churn_pct'][2]:.1f}%. Churn concentrates "
+                       "exactly in the anomalies univariate screens ",
                       html.B("structurally cannot see"), ": young customers with large "
                       "balances, multi-product holders with contradictory engagement. This "
                       "is the Phase-4 discovery."], kind="bad")),
@@ -473,13 +506,15 @@ phase4 = html.Div([
                   "balance units), but this snapshot cannot establish a pre-churn drop. "
                   "Hover a point to inspect the structural evidence."])),
 
-    section("Classification & action", meta="the anomaly typology, applied to all 876 records"),
+    section("Classification & action",
+            meta=f"the anomaly typology, applied to all {M['kpi']['n_flagged']:,} records"),
     html.Div([
         card("Every flagged record classified",
-             "The rubric's three classes, applied to all 876 flagged records.",
+             f"The rubric's three classes, applied to all "
+             f"{M['kpi']['n_flagged']:,} flagged records.",
              C.graph(F.CLASS_DONUT_FIG)),
         card("Subtypes",
-             "The four risk-signal templates the bank should monitor prospectively.",
+             "The three risk-signal templates the bank should monitor prospectively.",
              C.graph(F.SUBTYPE_FIG)),
     ], className="grid g2-narrow"),
     card("Recommended actions per class", None,
@@ -492,10 +527,14 @@ phase4 = html.Div([
     section("Cross-reference with Phase 2", meta="explicitly graded"),
     html.Div([
         card("Where DBSCAN's noise lives across the personas",
-             "The 554 Phase-2 density outliers, mapped into the three K-Means segments.",
+             f"The {M['kpi']['dbscan_noise']:,} Phase-2 density outliers, mapped into "
+             "the three K-Means segments.",
              C.graph(F.CROSSREF_FIG),
-             insight(["The noise concentrates (10.6%) inside C0; the multi-product "
-                      "Germany-skew segment, and is rarest in the loyalist C2 (1.7%). "
+             insight([
+                      f"The noise concentrates most in C{NOISE_HIGHEST_CLUSTER} "
+                      f"({NOISE_SHARE_BY_CLUSTER[NOISE_HIGHEST_CLUSTER]:.1f}%) and is rarest "
+                      f"in C{NOISE_LOWEST_CLUSTER} "
+                      f"({NOISE_SHARE_BY_CLUSTER[NOISE_LOWEST_CLUSTER]:.1f}%). "
                       "Cluster outliers and statistical anomalies point at the same "
                       "neighbourhood of customers: unusual multi-product, older, "
                       "high-engagement-contradiction profiles."])),
@@ -505,9 +544,11 @@ phase4 = html.Div([
                  "people is mutual validation. Weakest pair: Z-score vs DBSCAN (κ 0.21); a "
                  "strict single-value fence and a joint-density method barely overlap, "
                  "exactly as the family analysis predicts. Anomaly votes must be weighted by "
-                 "the question each voter asks: the IF ∩ DBSCAN intersection is the "
-                 "high-value retention list; univariate flags are the data-quality and "
-                 "rare-case documentation pool."],
+                 f"the question each voter asks: {CONSENSUS_REVIEW_N} records are the "
+                 f"IF + DBSCAN Class-C consensus review pool, while {SOURCE_VERIFICATION_N} "
+                 "source-verification "
+                 "exceptions remain rare-case checks; univariate flags are the broader "
+                 "data-quality and rare-case documentation pool."],
                 title="Agreement between anomaly views"),
     ], className="grid g2"),
 
@@ -526,15 +567,18 @@ report = html.Div([
                 "not in columns.", className="hero-q"),
         html.P([
             "Raw-data inspection shows a 20% churn rate and mild demographic tilts. Mining "
-            "the same 10,000 customers end-to-end revealed four pieces of knowledge, none "
+            f"the same {M['kpi']['n_customers']:,} customers end-to-end revealed four "
+            "pieces of knowledge, none "
             "visible in a univariate report: (1) a compounding ", html.B("age 46–60 × engagement "
             "interaction"), " that escalates from 51% to 77% churn as conditions stack; "
             "(2) a ", html.B("Germany-associated retention gap"), " that persists in the "
             "tested inactive, single-product subgroup; (3) a customer book organized by ",
-            html.B("balance × product depth"), "; whose largest segment (41.7%) keeps "
+            html.B("balance × product depth"),
+            f"; whose largest segment ({M['clusters']['1']['share']:.1f}%) keeps "
             "six-figure balances anchored by only one product, and (4) the fact that ",
-            html.B("unusual combinations of normal values"), " are more churn-aligned (45.3%) "
-            "than extreme single values (24.7%). The value of this project is the "
+            html.B("unusual combinations of normal values"), " are more churn-aligned "
+            f"({M['uni_mv']['churn_pct'][3]:.1f}%) than extreme single values "
+            f"({M['uni_mv']['churn_pct'][1]:.1f}%). The value of this project is the "
             "interpretation of these hidden profiles; not prediction accuracy.",
         ], className="hero-a"),
     ], className="hero"),
@@ -553,14 +597,20 @@ report = html.Div([
                   "an antecedent. Action: investigate product fit and service quality in the "
                   "German operation, then validate whether the gap survives broader controls."),
         C.finding("3", "The riskiest mainstream segment is high-balance / single-product",
-                  "Persona C1: 4,168 customers (41.7%) with ~120K average balance units and "
-                  "exactly one product; churns at 25.6%, the highest of the three segments. "
+                  f"Persona C1: {M['clusters']['1']['n']:,} customers "
+                  f"({M['clusters']['1']['share']:.1f}%) with "
+                  f"~{M['clusters']['1']['balance_mean'] / 1000:.0f}K average balance units "
+                  f"and exactly one product; churns at {M['clusters']['1']['churn']:.1f}%, "
+                  "the highest of the three segments. "
                   "Money without product depth is unanchored. Action: cross-sell into C1 "
                   "before the money leaves; measure product depth, not balance, as the "
                   "loyalty KPI."),
         C.finding("4", "Monitor combinations, not thresholds",
-                  "Customers anomalous only as combinations churn at 45.3%, and 90% of them "
-                  "trip no single-value alarm. The 554 DBSCAN noise customers churn at 62.6%. "
+                  f"Customers anomalous only as combinations churn at "
+                  f"{M['uni_mv']['churn_pct'][3]:.1f}%, and "
+                  f"{M['uni_mv']['mv_only_hidden_pct']:.0f}% of them trip no single-value "
+                  f"alarm. The {M['kpi']['dbscan_noise']:,} DBSCAN noise customers churn at "
+                  f"{M['dbscan']['noise_churn']:.1f}%. "
                   "Action: add a multivariate anomaly score (IF/DBSCAN-style) to the CRM "
                   "watchlist alongside the existing per-column limits."),
     ]),
@@ -583,8 +633,10 @@ report = html.Div([
         C.qa("Q2 · Which clustering method produced the most interpretable segments?",
              ["K-Means at K=3; chosen over the silhouette-peak K=2, which merely restates "
               "the bimodal balance column. Ward hierarchical validates the partition "
-              "(ARI 0.746); DBSCAN is the better discovery tool (its 554 noise points churn "
-              "at 62.6%) but a worse persona tool (it only splits on product count). Honest "
+              f"(ARI {M['validation']['ari_kmeans_ward']:.3f}); DBSCAN is the better "
+              f"discovery tool (its {M['kpi']['dbscan_noise']:,} noise points churn at "
+              f"{M['dbscan']['noise_churn']:.1f}%) but a worse persona tool "
+              "(it only splits on product count). Honest "
               "caveat: all silhouettes ≤ 0.164; these are stable, business-distinct "
               "operational segments of a continuum, not natural species."]),
         C.qa("Q3 · What anomalies were found, and what do they suggest in a real banking "

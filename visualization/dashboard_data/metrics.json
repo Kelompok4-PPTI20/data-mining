@@ -5,7 +5,7 @@
   "churn_rate": 20.37,
   "n_churned": 2037,
   "n_clusters": 3,
-  "n_churn_rules": 10,
+  "n_documented_churn_rules": 10,
   "n_rules_generated": 45820,
   "n_rules_confidence": 6458,
   "n_rules_filtered": 613,
@@ -236,6 +236,7 @@
  "clusters": {
   "0": {
    "name": "High-Balance Multi-Product Germany-Enriched Mixed-Risk",
+   "alias": "The German Multi-Product Saver",
    "n": 2169,
    "share": 21.7,
    "churn": 21.8,
@@ -258,6 +259,7 @@
   },
   "1": {
    "name": "High-Balance Single-Product Germany-Enriched Watchlist",
+   "alias": "The One-Product High-Balance Drifter",
    "n": 4168,
    "share": 41.7,
    "churn": 25.6,
@@ -278,6 +280,7 @@
   },
   "2": {
    "name": "Zero-Balance Multi-Product Spain-Enriched Loyalist",
+   "alias": "The Zero-Balance Multi-Product Steady",
    "n": 3663,
    "share": 36.6,
    "churn": 13.6,

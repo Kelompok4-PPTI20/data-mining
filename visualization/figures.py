@@ -595,7 +595,8 @@ UNIMV_FIG = make_unimv_fig()
 
 def make_outlier_scatter(colorby):
     fig = _base(430)
-    hover = ("Balance " + REC["Balance"].map("{:,.0f}".format) + " | age " +
+    hover = ("Source row " + REC["Source_RowNumber"].astype(str) + " | balance " +
+             REC["Balance"].map("{:,.0f}".format) + " | age " +
              REC["Age"].astype(str) + " | products " + REC["NumOfProducts"].astype(str) +
              " | " + REC["Geography"] + " | flags: " +
              REC["Composite_Anomaly_Score"].astype(str) + "/4")

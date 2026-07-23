@@ -11,7 +11,7 @@ Inputs (produced by the four phase1–phase4 notebooks):
     data/processed/churn_clustering_matrix.csv  Path-A scaled matrix
     data/processed/dbscan_outlier_indices.npy   Phase-2 DBSCAN noise indices
     outputs/ph3_top_association_rules.csv    Phase-3 deliverable rule table
-    outputs/ph3_all_association_rules.csv    all 520 filtered rules
+    outputs/ph3_all_association_rules.csv    all filtered rules
     outputs/ph4_anomaly_report.csv           per-record anomaly flags + classes
 
 Outputs:
@@ -39,6 +39,8 @@ from sklearn.metrics import (adjusted_rand_score, cohen_kappa_score,
                              normalized_mutual_info_score, silhouette_score)
 from sklearn.preprocessing import LabelEncoder
 
+from validate_consistency import validate_consistency
+
 warnings.filterwarnings("ignore")
 
 RANDOM_STATE = 42
@@ -56,8 +58,52 @@ matrix = pd.read_csv(ROOT / "data/processed/churn_clustering_matrix.csv")
 dbscan_noise_idx = np.load(ROOT / "data/processed/dbscan_outlier_indices.npy")
 top_rules = pd.read_csv(ROOT / "outputs/ph3_top_association_rules.csv")
 all_rules = pd.read_csv(ROOT / "outputs/ph3_all_association_rules.csv")
+ledger = pd.read_csv(ROOT / "outputs/evaluation_metrics.csv")
 
-assert len(df) == len(anom) == len(matrix) == 10_000, "row alignment broken"
+def ledger_value(phase, metric):
+    """Return one authoritative executed-notebook metric."""
+    match = ledger[(ledger["Phase"] == phase) & (ledger["Metric"] == metric)]
+    assert len(match) == 1, f"Expected one ledger row for {phase} / {metric}"
+    return float(match.iloc[0]["Value"])
+
+
+expected_rows = int(ledger_value("Phase 1", "Raw rows audited"))
+expected_documented_rules = int(
+    ledger_value("Phase 3", "Documented churn rules")
+)
+expected_filtered_rules = int(
+    ledger_value("Phase 3", "Rules after confidence and lift filters")
+)
+expected_flagged = int(
+    ledger_value("Phase 4", "Anomaly candidates before corroboration")
+)
+expected_corroborated = int(
+    ledger_value("Phase 4", "Corroborated anomalies (2+ methods)")
+)
+
+assert len(df) == len(anom) == len(matrix) == expected_rows, \
+    "Phase 1-4 row counts do not agree"
+assert df["Source_RowNumber"].is_unique, \
+    "Clustered source keys are not unique"
+assert anom["Source_RowNumber"].is_unique, \
+    "Anomaly source keys are not unique"
+assert df["Source_RowNumber"].equals(anom["Source_RowNumber"]), \
+    "Cluster and anomaly exports are not in the same source-key order"
+for profile_col in ["Geography", "Gender", "Exited"]:
+    assert df[profile_col].reset_index(drop=True).equals(
+        matrix[profile_col].reset_index(drop=True)
+    ), f"Clustering matrix profile column drifted: {profile_col}"
+assert len(top_rules) == expected_documented_rules, \
+    "Top-rule export disagrees with the Phase 3 ledger"
+assert len(all_rules) == expected_filtered_rules, \
+    "Filtered-rule export disagrees with the Phase 3 ledger"
+assert df["Cluster"].nunique() == int(
+    ledger_value("Phase 2", "Selected K")
+), "Cluster export disagrees with the Phase 2 selected K"
+assert int((anom["Composite_Anomaly_Score"] >= 1).sum()) == expected_flagged, \
+    "Anomaly candidate count disagrees with the Phase 4 ledger"
+assert int((anom["Composite_Anomaly_Score"] >= 2).sum()) == expected_corroborated, \
+    "Corroborated anomaly count disagrees with the Phase 4 ledger"
 
 X_cl = matrix.drop(columns=["Geography", "Gender", "Exited"])
 baseline = df["Exited"].mean()
@@ -93,10 +139,17 @@ else:
     db_labels = db.fit_predict(X_cl)
     np.save(CK / "dbscan.npy", db_labels)
 n_noise = int((db_labels == -1).sum())
-print(f"  noise points: {n_noise} (notebook: 554)")
+print(
+    f"  noise points: {n_noise} "
+    f"(notebook ledger: {int(ledger_value('Phase 2', 'DBSCAN noise records'))})"
+)
 saved_noise = set(dbscan_noise_idx.tolist())
 recomputed_noise = set(np.where(db_labels == -1)[0].tolist())
 print(f"  overlap with saved noise indices: {len(saved_noise & recomputed_noise)}/{len(saved_noise)}", flush=True)
+assert saved_noise == recomputed_noise, \
+    "Dashboard DBSCAN noise does not match Phase 2 saved outlier indices"
+assert n_noise == int(ledger_value("Phase 2", "DBSCAN noise records")), \
+    "Dashboard DBSCAN count disagrees with the Phase 2 ledger"
 
 print("Ward hierarchical (K=3) ...", flush=True)
 if (CK / "ward.npy").exists():
@@ -166,16 +219,20 @@ print("Computing aggregates ...", flush=True)
 M = {}
 
 M["kpi"] = {
-    "n_customers": 10_000,
+    "n_customers": expected_rows,
     "n_features_raw": 14,
     "churn_rate": round(baseline * 100, 2),
     "n_churned": int(df["Exited"].sum()),
-    "n_clusters": 3,
-    "n_churn_rules": int(len(top_rules)),  # documented, non-redundant top-rule table
-    "n_rules_generated": 45_820,
-    "n_rules_confidence": 6_458,
+    "n_clusters": int(df["Cluster"].nunique()),
+    "n_documented_churn_rules": expected_documented_rules,
+    "n_rules_generated": int(ledger_value("Phase 3", "Rules generated")),
+    "n_rules_confidence": int(
+        ledger_value("Phase 3", "Rules after confidence filter")
+    ),
     "n_rules_filtered": int(len(all_rules)),
-    "n_nonredundant_churn_rules": 11,
+    "n_nonredundant_churn_rules": int(
+        ledger_value("Phase 3", "Non-redundant churn rules retained")
+    ),
     "n_rules_total": int(len(all_rules)),
     "top_rule_lift": round(float(top_rules["Lift"].max()), 2),
     "top_rule_conf": round(float(top_rules["Confidence (%)"].max()), 1),
@@ -253,12 +310,14 @@ M["feature_selection"] = {
 # --- Phase 2: clusters -------------------------------------------------------
 print("Cluster profiles ...", flush=True)
 clus_names = rec.groupby("Cluster")["Cluster_Name"].first().to_dict()
+clus_aliases = rec.groupby("Cluster")["Persona_Alias"].first().to_dict()
 prof = {}
 for k, sub in rec.groupby("Cluster"):
     geo = sub["Geography"].value_counts(normalize=True).mul(100).round(1)
     pmix = sub["NumOfProducts"].value_counts(normalize=True).mul(100).round(1).sort_index()
     prof[int(k)] = {
         "name": clus_names[k],
+        "alias": clus_aliases[k],
         "n": int(len(sub)),
         "share": round(len(sub) / len(rec) * 100, 1),
         "churn": round(sub["Exited"].mean() * 100, 1),
@@ -460,7 +519,7 @@ for i, r in top_rules.iterrows():
         "confidence_pct": float(r["Confidence (%)"]),
         "lift": float(r["Lift"]),
         "conviction": float(r["Conviction"]),
-        "customers": int(round(r["Support (%)"] / 100 * 10_000)),
+        "customers": int(round(float(r["support"]) * len(df))),
         "commentary": (
             r.get("Business Commentary")
             if pd.notna(r.get("Business Commentary"))
@@ -495,7 +554,11 @@ with open(OUT / "rules.json", "w") as f:
     json.dump({"top10": rules_out, "all_churn_rules": extra,
                "thresholds": {"min_support": 0.03, "min_confidence": 0.50, "min_lift": 1.5},
                "n_total_rules": int(len(all_rules)),
-               "n_churn_rules": int(len(churn13))}, f, indent=1)
+               "n_single_churn_consequent_rules": int(len(churn13))},
+              f, indent=1)
+
+print("Validating notebook-to-dashboard consistency ...", flush=True)
+validate_consistency(ROOT)
 
 import shutil
 shutil.rmtree(CK, ignore_errors=True)   # checkpoints no longer needed

@@ -16,12 +16,15 @@ From this `visualization/` folder, using the project's environment
 
 ```bash
 python prepare_data.py   # once — builds dashboard_data/ from Phases 1-4 outputs
+python validate_consistency.py  # optional standalone notebook/cache reconciliation
 python app.py            # then open http://127.0.0.1:8050
 ```
 
 `prepare_data.py` only needs re-running if the notebook regenerates the files
 in `data/processed/` or `outputs/`. Heavy steps are checkpointed — if it gets
-interrupted, just run it again.
+interrupted, just run it again. It runs the same source-key, metric-ledger,
+rule, persona, and anomaly reconciliation automatically before reporting
+success.
 
 ## Rubric coverage (5.5 Excellent)
 
@@ -52,6 +55,7 @@ interrupted, just run it again.
 | `theme.py` | Palette tokens + shared Plotly template |
 | `data.py` | Loads the precomputed cache |
 | `prepare_data.py` | Assembles `dashboard_data/` from Phase 1–4 artifacts |
+| `validate_consistency.py` | Reconciles notebook exports, the metric ledger, and dashboard cache |
 | `assets/styles.css` | KDD Design System v2 (auto-loaded by Dash) |
 | `dashboard_data/` | Generated cache: `records.csv`, `metrics.json`, `rules.json` |
 | `DESIGN_RATIONALE.md` | The v2 redesign: critique of v1, every decision + UX principle + trade-off |
