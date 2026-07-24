@@ -204,7 +204,7 @@ phase1 = html.Div([
          "Left: linear association with churn (Pearson |r|, undefined for nominal "
          "Geography/Gender, which is precisely why a second lens is required). "
          "Right: information-theoretic relevance (mutual information + Shannon information gain).",
-         C.graph(F.FEATSEL_FIG),
+         C.graph(F.FEATSEL_FIG, min_width=760),
          insight(["The two lenses agree at the top (Age, IsActiveMember), but ", html.B(
              "NumOfProducts is nearly invisible to correlation (|r| = 0.05) and #1–2 by "
              "information gain"), " because its U-shaped churn relation cancels out in a "
@@ -268,7 +268,7 @@ phase2 = html.Div([
     html.Div([
         card("Elbow & silhouette",
              "The two required validity checks disagree, and the disagreement is informative.",
-             C.graph(F.ELBOW_SIL_FIG),
+             C.graph(F.ELBOW_SIL_FIG, min_width=600),
              insight(["Silhouette peaks at K=2 (0.164), but that split is just 'has money vs "
                       "doesn't' (the bimodal Balance column restated). The elbow shows no sharp "
                       "knee, only diminishing returns from K=3–5. ", html.B(
@@ -293,7 +293,7 @@ phase2 = html.Div([
         card("Segment fingerprints (snake plot)",
              "How far each segment's average sits from the bank average, in standard "
              "deviations; all features on one comparable scale.",
-             C.graph(F.SNAKE_FIG),
+             C.graph(F.SNAKE_FIG, min_width=600),
              insight(["The three lines only fan apart on Balance and NumOfProducts; the same "
                       "verdict as the effect sizes, from a third angle. C1 (purple) = high "
                       "balance, one product; C2 (teal) = zero balance, multi-product; "
@@ -301,7 +301,7 @@ phase2 = html.Div([
         card("Churn and geography by segment",
              "Left: the churn validation lens (never used to form clusters). Right: where "
              "each segment's customers live.",
-             C.graph(F.CLUSTER_CHURN_FIG),
+             C.graph(F.CLUSTER_CHURN_FIG, min_width=600),
              insight(["Churn spans 13.6% → 25.6% across segments; a spread the weak "
                       "silhouette knows nothing about. And Germany concentrates in the "
                       "high-balance clusters (52% of C0) while being ", html.B(
@@ -382,7 +382,7 @@ phase3 = html.Div([
         card("How the top-10 rules connect",
              "Blue circles = customer attributes (bigger = appears in more rules). Diamonds = "
              "rules A–J (redder = higher lift; hover for details). Every rule points to churn.",
-             C.graph(F.RULE_NETWORK_FIG),
+             C.graph(F.RULE_NETWORK_FIG, min_width=600),
              insight(["One attribute sits at the heart of almost every rule: ", html.B(
                  "Age 46–60"), ". Churn risk compounds when that age band meets inactivity, "
                  "single-product holdings, female gender, German geography or a balance above "
@@ -392,7 +392,7 @@ phase3 = html.Div([
         card("Rule quality at a glance",
              "Each bubble is a rule: right = more reliable (confidence), up = stronger vs "
              "baseline (lift), bigger = more customers, darker = more conditions.",
-             C.graph(F.RULE_SCATTER_FIG),
+             C.graph(F.RULE_SCATTER_FIG, min_width=600),
              insight(["Rules stack up along the dotted frontier because lift = confidence ÷ "
                       "20.4%. The prize is the top-right: rule A (3 conditions, 77% "
                       "confidence) describes 405 real churners; specific enough to action, "
@@ -457,7 +457,7 @@ phase4 = html.Div([
          "All six methods, ranked by churn rate among the customers they flag. Blue = "
          "multivariate (judge the whole profile); gray = univariate (judge one value at a "
          "time). Note IF/LOF fix their count at 5% by construction; IQR/Z discover theirs.",
-         C.graph(F.METHOD_FIG),
+         C.graph(F.METHOD_FIG, min_width=680),
          insight(["A clean split: the structural, whole-profile methods (DBSCAN 62.6%, "
                   "Mahalanobis 65.8%, Isolation Forest 49.0%) flag churn-dense customers, "
                   "while single-value screens flag benign extremes (IQR 23.5%, Z-score "
@@ -468,7 +468,7 @@ phase4 = html.Div([
         card("The consensus trap",
              "Churn rate by how many of the 4 core methods (IQR, Z-score, Isolation Forest, "
              "DBSCAN) agree a customer is anomalous.",
-             C.graph(F.COMPOSITE_FIG),
+             C.graph(F.COMPOSITE_FIG, min_width=560),
              insight(["More votes ≠ more risk. The peak is at score 2 (65.9%); mostly the "
                       "IF + DBSCAN pair agreeing while both univariate fences stay silent. "
                       "Score 3–4 requires breaking a univariate fence, which fires almost "
@@ -480,7 +480,7 @@ phase4 = html.Div([
              f"Churn by anomaly family. Of the {u['n'][3]} multivariate-only customers, "
              f"{u['mv_only_hidden']} ({u['mv_only_hidden_pct']:.0f}%) have NO single value "
              "beyond |z| = 3; every number looks normal; only the combination is rare.",
-             C.graph(F.UNIMV_FIG),
+             C.graph(F.UNIMV_FIG, min_width=600),
               insight(["The two families barely overlap (Jaccard 0.21, κ 0.31) because they "
                        "ask different questions. Across neither, univariate-only, and "
                        f"multivariate-only customers, churn is {u['churn_pct'][0]:.1f}% → "
@@ -512,7 +512,7 @@ phase4 = html.Div([
         card("Every flagged record classified",
              f"The rubric's three classes, applied to all "
              f"{M['kpi']['n_flagged']:,} flagged records.",
-             C.graph(F.CLASS_DONUT_FIG)),
+             C.graph(F.CLASS_DONUT_FIG, min_width=420)),
         card("Subtypes",
              "The three risk-signal templates the bank should monitor prospectively.",
              C.graph(F.SUBTYPE_FIG)),
@@ -529,7 +529,7 @@ phase4 = html.Div([
         card("Where DBSCAN's noise lives across the personas",
              f"The {M['kpi']['dbscan_noise']:,} Phase-2 density outliers, mapped into "
              "the three K-Means segments.",
-             C.graph(F.CROSSREF_FIG),
+             C.graph(F.CROSSREF_FIG, min_width=600),
              insight([
                       f"The noise concentrates most in C{NOISE_HIGHEST_CLUSTER} "
                       f"({NOISE_SHARE_BY_CLUSTER[NOISE_HIGHEST_CLUSTER]:.1f}%) and is rarest "
@@ -703,6 +703,8 @@ _business_top_match_n = round(
     _business_top_rule["customers"] / (_business_top_rule["confidence_pct"] / 100))
 _business_geo = dict(zip(M["churn_by"]["Geography"]["labels"],
                          M["churn_by"]["Geography"]["churn_pct"]))
+_business_geo_total = dict(zip(M["churn_by"]["Geography"]["labels"],
+                               M["churn_by"]["Geography"]["total"]))
 _business_products = dict(zip(M["churn_by"]["NumOfProducts"]["labels"],
                               M["churn_by"]["NumOfProducts"]["churn_pct"]))
 _business_watchlist = M["clusters"]["1"]
@@ -746,68 +748,98 @@ business = html.Div([
     section("Four business takeaways", meta="the five KDD phases, translated into decisions"),
     html.Div([
         card("01 · Shallow relationships are the clearest warning",
-             f"Customers with one product left at {_business_products['1']:.1f}%, compared "
-             f"with {_business_products['2']:.1f}% among customers with exactly two. A high "
-             "balance by itself did not protect the relationship.",
+             "Departure rate by number of products held. A high balance by itself "
+             "did not protect the relationship; a second product did.",
+             C.graph(F.BIZ_PROD),
              insight(["Test whether a relevant second product and a relationship review improve "
-                      "retention. Product count is not a goal by itself, so avoid indiscriminate "
-                      "cross-selling."], kind="good", title="Business response")),
+                      "retention. Three-plus products marked departing customers here, so avoid "
+                      "indiscriminate cross-selling; two is the safe depth."],
+                     kind="good", title="Business response")),
         card("02 · One group should head the retention queue",
-             f"Among customers aged 46–60 who were inactive and held one product, "
-             f"{_business_top_rule['confidence_pct']:.1f}% left; "
-             f"{_business_top_rule['customers']:,} of {_business_top_match_n:,} matching "
-             "customers in this data.",
+             "Departure rate as the three warning signs stack on the same customer.",
+             [C.graph(F.BIZ_QUEUE),
+              C.fraction_bar(_business_top_rule["customers"], _business_top_match_n,
+                             "Customers matching all three signs who left")],
              insight(["Prioritize a relevant service conversation with this combined profile. "
                       "Do not run a blanket campaign aimed at everyone in the age band."],
                      kind="bad", title="Business response")),
         card("03 · Germany needs its own investigation",
-             f"Germany's departure rate was {_business_geo['Germany']:.1f}%, roughly twice "
-             f"France ({_business_geo['France']:.1f}%) and Spain "
-             f"({_business_geo['Spain']:.1f}%). It remained 52.1% among inactive, "
-             "one-product German customers.",
+             "Departure rate by country. Among inactive, one-product German customers "
+             "it reached 52.1%.",
+             C.graph(F.BIZ_GEO),
              insight(["Review local product fit, service experience and customer feedback in "
                       "Germany before applying a bank-wide remedy. Geography is a clue to "
                       "investigate, not a fault of the customer."],
                      kind="warn", title="Business response")),
         card("04 · Single-field alerts miss hidden risk",
-             f"{_business_hidden['n'][3]:,} customers were flagged only by whole-profile "
-             f"checks, and {_business_hidden['churn_pct'][3]:.1f}% had left. Of this group, "
-             f"{_business_hidden['mv_only_hidden']:,} "
-             f"({_business_hidden['mv_only_hidden_pct']:.0f}%) had no individually extreme "
-             "value.",
+             f"Departure rate by type of unusualness. Of the "
+             f"{_business_hidden['n'][3]:,} customers flagged only as unusual combinations, "
+             f"{_business_hidden['mv_only_hidden_pct']:.0f}% had no individually extreme value.",
+             C.graph(F.BIZ_HIDDEN),
              insight(["Keep existing account limits, but add a whole-customer review list so "
                       "risky combinations are visible. A person should review the context "
                       "before any outreach."], title="Business response")),
     ], className="grid g2"),
 
-    section("What the bank should do next", meta="priority order, not a blanket campaign"),
+    section("What the bank should do next",
+            meta="priority order, with the yardstick for each pilot"),
     card(None, None, [
-        C.finding("1", "Build a targeted retention queue",
-                  "Start with customers aged 46–60 who are inactive and hold one product. "
-                  "Invite them into a relevant service conversation and learn why activity "
-                  "fell; do not target the whole age group."),
-        C.finding("2", "Deepen high-value, one-product relationships",
-                  f"This segment contains {_business_watchlist['n']:,} customers and had a "
-                  f"{_business_watchlist['churn']:.1f}% departure rate. Test a relevant "
-                  "second-product offer and relationship-manager contact, then compare "
-                  "retention with a similar group that did not receive the pilot."),
-        C.finding("3", "Investigate Germany separately",
-                  "Review product fit, service quality and customer feedback in Germany. "
-                  "Test local remedies before assuming the same response will work in every "
-                  "country."),
-        C.finding("4", "Add whole-customer monitoring, with a human check",
-                  f"Use profile-level warnings alongside existing single-field checks, but "
-                  f"separate them from data-quality alerts. Of the unusual cases, "
-                  f"{_business_rare_n:,} were classified as rare but legitimate, while only "
-                  f"{_business_data_error_n:,} were suspected data errors."),
+        html.Div(html.Table([
+            html.Thead(html.Tr([
+                html.Th("#"), html.Th("Action"), html.Th("Who it targets"),
+                html.Th("Scale in this data"), html.Th("How to know it works"),
+            ])),
+            html.Tbody([
+                html.Tr([
+                    html.Td(html.B("1", className="num")),
+                    html.Td(html.B("Build a targeted retention queue")),
+                    html.Td("Aged 46–60, inactive, one product; a relevant service "
+                            "conversation, not a blanket age-band campaign"),
+                    html.Td(f"{_business_top_match_n:,} customers; "
+                            f"{_business_top_rule['customers']:,} left "
+                            f"({_business_top_rule['confidence_pct']:.1f}%)",
+                            className="metric-cell"),
+                    html.Td("Retention vs a fair comparison group; movement from "
+                            "inactivity back to activity"),
+                ]),
+                html.Tr([
+                    html.Td(html.B("2", className="num")),
+                    html.Td(html.B("Deepen high-value, one-product relationships")),
+                    html.Td("The high-balance single-product segment; test a relevant "
+                            "second-product offer and relationship-manager contact"),
+                    html.Td(f"{_business_watchlist['n']:,} customers; "
+                            f"{_business_watchlist['churn']:.1f}% left",
+                            className="metric-cell"),
+                    html.Td("Suitable one-to-two-product adoption and retention vs a "
+                            "comparison group"),
+                ]),
+                html.Tr([
+                    html.Td(html.B("3", className="num")),
+                    html.Td(html.B("Investigate Germany separately")),
+                    html.Td("The German operation: product fit, service quality and "
+                            "customer feedback, with locally tested remedies"),
+                    html.Td(f"{_business_geo_total['Germany']:,} customers; "
+                            f"{_business_geo['Germany']:.1f}% left",
+                            className="metric-cell"),
+                    html.Td("Whether the Germany gap vs France and Spain narrows"),
+                ]),
+                html.Tr([
+                    html.Td(html.B("4", className="num")),
+                    html.Td(html.B("Add whole-customer monitoring, with a human check")),
+                    html.Td("Profile-level warnings alongside existing single-field "
+                            "checks, kept separate from data-quality alerts"),
+                    html.Td(f"{_business_hidden['n'][3]:,} combination-flagged; "
+                            f"{_business_rare_n:,} rare-but-valid; "
+                            f"{'none' if _business_data_error_n == 0 else f'{_business_data_error_n:,}'} "
+                            "suspected data errors", className="metric-cell"),
+                    html.Td("Review outcomes on the list; complaints and opt-outs "
+                            "stay flat"),
+                ]),
+            ]),
+        ], className="dtable dtable--actions"), className="table-scroll"),
+        html.Div("Measure the pilots, not just the outreach volume: every action above "
+                 "is paired with its success yardstick.", className="footnote"),
     ]),
-
-    callout([
-        html.B("Measure the pilots, not just the outreach volume. "),
-        "Track retention in the targeted groups against a fair comparison group, movement "
-        "from inactivity back to activity, suitable one-to-two-product adoption, and whether "
-        "the Germany gap narrows. Also watch complaints and opt-outs as safeguards."
-    ], title="How to know the response is working"),
 
     callout([
         "These are historical patterns, not causes or individual predictions. The data is one "

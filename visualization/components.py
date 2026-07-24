@@ -23,10 +23,27 @@ CFG = T.GRAPH_CONFIG
 # atoms
 # ===========================================================================
 
-def graph(fig, gid=None, height=None):
+def graph(fig, gid=None, height=None, min_width=None):
+    """Responsive graph with an optional scroll-safe analytical width.
+
+    Dense or multi-panel figures cannot remain legible when squeezed into a
+    phone-width card. When ``min_width`` is supplied, only the chart becomes
+    horizontally scrollable; the surrounding card copy still wraps normally.
+    """
     style = {"height": f"{height}px"} if height else {}
+    if min_width:
+        style["minWidth"] = f"{min_width}px"
     kw = {"id": gid} if gid else {}
-    return dcc.Graph(figure=fig, config=CFG, style=style, **kw)
+    component = dcc.Graph(figure=fig, config=CFG, style=style, **kw)
+    if not min_width:
+        return component
+    return html.Div(
+        component,
+        className="chart-scroll",
+        role="region",
+        tabIndex="0",
+        **{"aria-label": "Scrollable chart on narrow screens"},
+    )
 
 
 def chip(text, kind="gray"):
@@ -41,6 +58,24 @@ def goto(page, children, cls, src):
 
 def control(label, component):
     return html.Div([html.Div(label, className="control-label"), component])
+
+
+def fraction_bar(numer, denom, label, color=None):
+    """Plain-language share bar ('numer of denom' filled) for lay audiences;
+    typography reuses existing control-label / stat-sub classes."""
+    share = numer / denom * 100
+    return html.Div([
+        html.Div(label, className="control-label"),
+        html.Div(html.Div(style={"width": f"{share:.1f}%", "height": "100%",
+                                 "background": color or T.CRITICAL,
+                                 "borderRadius": "4px"}),
+                 style={"height": "10px", "background": T.SURFACE_100,
+                        "border": f"1px solid {T.BORDER_200}",
+                        "borderRadius": "5px", "overflow": "hidden",
+                        "margin": "4px 0 2px"}),
+        html.Div(f"{numer:,} of {denom:,} customers ({share:.1f}%)",
+                 className="stat-sub"),
+    ], style={"margin": "10px 0 2px"})
 
 
 def pills(pid, options, value):
@@ -119,7 +154,9 @@ def card(title, subtitle=None, children=None, insight=None, extra_class=""):
     body = []
     if subtitle:
         body.append(html.P(subtitle, className="card-sub"))
-    if children:
+    # `is not None`, not truthiness: a childless Dash component (e.g. a bare
+    # dcc.Graph) has len() == 0 and is falsy, which silently dropped charts.
+    if children is not None:
         body += children if isinstance(children, list) else [children]
     if insight is not None:
         body.append(insight)
@@ -228,8 +265,10 @@ def rule_table(selected="A"):
     """Consequent column removed: every rule points to churn (stated once in
     the card subtitle), so ten identical 'Churned' chips were pure noise."""
     head = html.Tr([html.Th("#"), html.Th("IF the customer is …"),
-                    html.Th("Confidence"), html.Th("Lift"), html.Th(""),
-                    html.Th("Churners"), html.Th("Conviction")])
+                    html.Th("Confidence", className="num"),
+                    html.Th("Lift", className="num"), html.Th(""),
+                    html.Th("Churners", className="num"),
+                    html.Th("Conviction", className="num")])
     rows = []
     for r in R["top10"]:
         sel = " rrow--sel" if r["letter"] == selected else ""
@@ -323,7 +362,8 @@ def action_table():
          "Independent structural consensus/density evidence or ARM-profile overlap. Human review; "
          "test retention treatments rather than automate decisions.", "red"),
     ]
-    head = html.Tr([html.Th("Class"), html.Th("Records"), html.Th("Churn"),
+    head = html.Tr([html.Th("Class"), html.Th("Records", className="num"),
+                    html.Th("Churn", className="num"),
                     html.Th("Recommended action")])
     rows = [html.Tr([html.Td(chip(c, k)), html.Td(n, className="num"),
                      html.Td(ch, className="num"), html.Td(a)])

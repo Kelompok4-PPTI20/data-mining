@@ -18,9 +18,8 @@ Open Jupyter from the repository root with that environment, then run:
 3. `notebooks/phase2_clustering.ipynb`
 4. `notebooks/phase3_association_rules.ipynb`
 5. `notebooks/phase4_anomaly_detection.ipynb`
-6. `notebooks/phase5_knowledge_presentation.ipynb`
 
-The phase notebooks fail early when a required upstream artifact is missing. Quantitative report values are consolidated in `outputs/evaluation_metrics.csv` and summarized in `appendix.md`.
+The phase notebooks fail early when a required upstream artifact is missing. Quantitative report values are consolidated in `outputs/evaluation_metrics.csv`.
 
 ## Interactive dashboard
 
@@ -32,4 +31,4 @@ Set-Location visualization
 ..\.venv\Scripts\python.exe app.py
 ```
 
-Open `http://127.0.0.1:8050`. The Phase 5 notebook includes the report handoff, presentation outline, QA gate, and a server-side interaction benchmark. Browser latency should also be measured on the presentation machine.
+Open `http://127.0.0.1:8050` and use the dashboard for the knowledge insight of the churn database.

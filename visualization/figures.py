@@ -79,6 +79,56 @@ OV_COMBO = ov_bar(
 
 
 # ---------------------------------------------------------------------------
+# BUSINESS TAKEAWAYS (page 7): plain-language variants of the four discovery
+# charts. Same data as the OV_ figures, but lay labels, larger text, and a
+# visible bank-average reference line instead of technical annotations.
+# ---------------------------------------------------------------------------
+
+def biz_bar(labels, values, colors, height=240):
+    fig = _base(height)
+    fig.add_bar(x=values, y=labels, orientation="h",
+                marker_color=colors, marker_line_width=0,
+                text=[f"{v:.1f}%" for v in values],
+                textposition="outside", textfont=dict(size=12.5),
+                hoverinfo="skip")
+    fig.add_vline(x=BASELINE, line_dash="dash", line_color=T.INK, line_width=1.2,
+                  annotation_text=f"bank average {BASELINE:.1f}%",
+                  annotation_font=dict(size=10.5, color=T.INK2),
+                  annotation_position="top")
+    fig.update_layout(margin=dict(l=10, r=36, t=24, b=6), bargap=0.42,
+                      xaxis=dict(range=[0, max(values) * 1.26], visible=False),
+                      yaxis=dict(autorange="reversed", tickfont=dict(size=12)))
+    return fig
+
+
+_BIZ_PROD_SRC = M["churn_by"]["NumOfProducts"]
+BIZ_PROD = biz_bar(
+    [f"Holds {l} product{'s' if l != '1' else ''}  ({t:,} customers)"
+     for l, t in zip(_BIZ_PROD_SRC["labels"], _BIZ_PROD_SRC["total"])],
+    _BIZ_PROD_SRC["churn_pct"],
+    [T.AMBER, T.GREEN, T.RED, "#A61B37"])
+
+BIZ_QUEUE = biz_bar(
+    ["All customers", "Aged 46–60",
+     "… who are also inactive", "… and hold only one product"],
+    [BASELINE, M["churn_by"]["Age_Band"]["churn_pct"][2], 68.4, 77.3],
+    ["#B7BEC9", T.AMBER, "#EC6142", T.RED])
+
+_BIZ_GEO_SRC = M["churn_by"]["Geography"]
+BIZ_GEO = biz_bar(
+    [f"{l}  ({t:,} customers)"
+     for l, t in zip(_BIZ_GEO_SRC["labels"], _BIZ_GEO_SRC["total"])],
+    _BIZ_GEO_SRC["churn_pct"],
+    [T.BLUE, T.RED, T.BLUE])
+
+BIZ_HIDDEN = biz_bar(
+    ["Typical customers", "Unusual on one value only",
+     "Unusual value + combination", "Unusual combination only"],
+    M["uni_mv"]["churn_pct"],
+    ["#B7BEC9", "#7FA0FF", T.AMBER, T.RED])
+
+
+# ---------------------------------------------------------------------------
 # PHASE 1: distributions
 # ---------------------------------------------------------------------------
 
@@ -181,9 +231,9 @@ def make_featsel_fig():
     mi = [fs["mutual_info"][i] for i in order]
     ig = [fs["info_gain"][i] for i in order]
 
-    fig = make_subplots(rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.06,
-                        subplot_titles=("Lens 1 - Correlation  (Pearson |r|)",
-                                        "Lens 2 - Entropy  (mutual information & info gain, bits)"))
+    fig = make_subplots(rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.08,
+                        subplot_titles=("Correlation · |Pearson r|",
+                                        "Entropy · MI and information gain"))
     fig.add_bar(y=feats, x=[p if p is not None else 0 for p in pear], orientation="h",
                 marker_color=["#D8E1FF" if p is None else T.BLUE for p in pear],
                 text=["n/a (nominal)" if p is None else f"{p:.3f}" for p in pear],
@@ -194,11 +244,12 @@ def make_featsel_fig():
                 textfont=dict(size=10.5), row=1, col=2, hoverinfo="skip")
     fig.add_bar(y=feats, x=ig, orientation="h", marker_color="#C7B5FD", name="Information gain",
                 row=1, col=2, hovertemplate="info gain %{x:.4f} bits<extra></extra>")
-    fig.update_layout(height=380, barmode="group", bargap=0.28,
-                      legend=dict(y=1.12), margin=dict(l=10, r=20, t=42, b=10),
+    fig.update_layout(height=390, barmode="group", bargap=0.28,
+                      legend=dict(y=1.14, x=0.5, xanchor="center"),
+                      margin=dict(l=10, r=20, t=52, b=10),
                       xaxis1=dict(range=[0, 0.36]),
                       xaxis2=dict(range=[0, max(max(mi), max(ig)) * 1.3]))
-    fig.update_annotations(font_size=12)
+    fig.update_annotations(font_size=11.5)
     return fig
 
 
@@ -278,9 +329,8 @@ PCA_FIGS = {(a, c): make_pca_fig(a, c)
 
 def make_elbow_sil_fig():
     v = M["validation"]
-    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.09,
-                        subplot_titles=("Elbow method - inertia (WCSS)",
-                                        "Silhouette score - separation quality"))
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.11,
+                        subplot_titles=("Elbow · inertia", "Silhouette score"))
     fig.add_scatter(x=v["k_range"], y=v["inertia"], mode="lines+markers",
                     marker=dict(size=7, color=T.BLUE), line=dict(color=T.BLUE, width=2.4),
                     name="Inertia", row=1, col=1,
@@ -293,8 +343,8 @@ def make_elbow_sil_fig():
                     marker=dict(size=7, color=T.PURPLE), line=dict(color=T.PURPLE, width=2.4),
                     name="Silhouette", row=1, col=2,
                     hovertemplate="K=%{x}<br>silhouette %{y:.4f}<extra></extra>")
-    fig.add_scatter(x=[2], y=[v["sil_k2"]], mode="markers+text", text=["  peak = trivial balance split"],
-                    textposition="middle right", textfont=dict(size=10, color=T.INK2),
+    fig.add_scatter(x=[2], y=[v["sil_k2"]], mode="markers+text", text=["K=2 peak"],
+                    textposition="top center", textfont=dict(size=10, color=T.INK2),
                     marker=dict(size=11, color="white", line=dict(color=T.PURPLE, width=2)),
                     showlegend=False, row=1, col=2, hoverinfo="skip")
     fig.add_scatter(x=[3], y=[v["sil_k3"]], mode="markers+text", text=["chosen K = 3"],
@@ -313,16 +363,35 @@ ELBOW_SIL_FIG = make_elbow_sil_fig()
 
 def make_snake_fig():
     s = M["snake"]
+    short_legend = {
+        "1": "C1 · one-product",
+        "0": "C0 · multi-product",
+        "2": "C2 · zero-balance",
+    }
+    tick_labels = {
+        "CreditScore": "Credit<br>score",
+        "NumOfProducts": "Products",
+        "HasCrCard": "Credit<br>card",
+        "IsActiveMember": "Active<br>member",
+        "EstimatedSalary": "Estimated<br>salary",
+    }
     fig = _base(330)
     for k in ["1", "0", "2"]:
         fig.add_scatter(x=s["features"], y=s["clusters"][k], mode="lines+markers",
-                        name=T.CLUSTER_SHORT[int(k)],
+                        name=short_legend[k],
                         line=dict(color=T.CLUSTER_COLORS[int(k)], width=2.6),
                         marker=dict(size=7),
                         hovertemplate="%{x}: %{y:+.2f} SD<extra></extra>")
     fig.add_hline(y=0, line_color=T.INK3, line_width=1)
     fig.update_layout(height=330, yaxis_title="deviation from bank average (SD units)",
-                      margin=dict(l=10, r=14, t=10, b=10))
+                      legend=dict(x=0.5, xanchor="center"),
+                      margin=dict(l=10, r=14, t=10, b=34))
+    fig.update_xaxes(
+        tickmode="array",
+        tickvals=s["features"],
+        ticktext=[tick_labels.get(feature, feature) for feature in s["features"]],
+        tickangle=0,
+    )
     return fig
 
 
@@ -353,9 +422,8 @@ EFFECT_FIG = make_effect_fig()
 
 
 def make_cluster_churn_fig():
-    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.1,
-                        subplot_titles=("Churn rate per segment (validation lens)",
-                                        "Where each segment lives (geography mix)"),
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
+                        subplot_titles=("Churn rate", "Geography mix"),
                         column_widths=[0.45, 0.55])
     ks = [1, 0, 2]
     names = [f"C{k}" for k in ks]
@@ -366,7 +434,8 @@ def make_cluster_churn_fig():
                 customdata=[[M["clusters"][str(k)]["n"]] for k in ks],
                 hovertemplate="<b>%{x}</b> churn %{y}%<br>%{customdata[0]:,} customers<extra></extra>",
                 showlegend=False)
-    _baseline_hline(fig, row=1, col=1)
+    _baseline_hline(fig, text=f"avg {BASELINE:.1f}%", row=1, col=1,
+                    pos="bottom right")
 
     geo_colors = {"France": T.BLUE, "Germany": T.RED, "Spain": "#E8A93B"}
     for geo in ["France", "Germany", "Spain"]:
@@ -375,12 +444,16 @@ def make_cluster_churn_fig():
                     text=[f"{M['clusters'][str(k)]['geo_mix'][geo]:.0f}%" for k in ks],
                     textposition="inside", textfont=dict(size=10.5, color="white"),
                     hovertemplate=f"{geo}: %{{x:.1f}}%<extra></extra>", row=1, col=2)
-    fig.update_layout(height=320, barmode="stack",
-                      legend=dict(y=1.14, x=0.55), margin=dict(l=10, r=14, t=42, b=10))
+    fig.update_layout(
+        height=320,
+        barmode="stack",
+        legend=dict(y=1.17, yanchor="bottom", x=0.76, xanchor="center"),
+        margin=dict(l=10, r=14, t=62, b=10),
+    )
     fig.update_yaxes(autorange="reversed", row=1, col=2)
     fig.update_yaxes(range=[0, 32], title_text="churn %", row=1, col=1)
     fig.update_xaxes(range=[0, 100], ticksuffix="%", row=1, col=2)
-    fig.update_annotations(font_size=12)
+    fig.update_annotations(font_size=11.5)
     return fig
 
 
@@ -493,13 +566,18 @@ def make_rule_scatter():
     xs = np.linspace(50, 80, 40)
     fig.add_scatter(x=xs, y=xs / BASELINE, mode="lines",
                     line=dict(color=T.INK3, dash="dot", width=1.4),
-                    name="lift implied by confidence (conf / 20.4%)",
+                    name="confidence ÷ 20.4% baseline",
                     hoverinfo="skip")
     sizes = [10 + r["support_pct"] * 6 for r in rules]
+    label_positions = {
+        "G": "top right",
+        "H": "bottom left",
+    }
     fig.add_scatter(
         x=[r["confidence_pct"] for r in rules], y=[r["lift"] for r in rules],
         mode="markers+text", text=[r["letter"] for r in rules],
-        textposition="top center", textfont=dict(size=11, color=T.INK2),
+        textposition=[label_positions.get(r["letter"], "top center") for r in rules],
+        textfont=dict(size=11, color=T.INK2),
         marker=dict(size=sizes, color=[len(r["if_items"]) for r in rules],
                     colorscale=[[0, "#7FA0FF"], [0.5, T.BLUE], [1, T.BLUE_D]],
                     opacity=0.85, line=dict(color="white", width=1.5),
@@ -530,7 +608,7 @@ def make_method_fig():
     fig.add_bar(
         y=[r["method"] for r in rows], x=[r["churn_pct"] for r in rows], orientation="h",
         marker_color=[T.BLUE if r["family"] == "Multivariate" else "#B7BEC9" for r in rows],
-        text=[f"{r['churn_pct']}%  ({r['flagged']:,} flagged)" for r in rows],
+        text=[f"{r['churn_pct']}% · n={r['flagged']:,}" for r in rows],
         textposition="outside", textfont=dict(size=11),
         customdata=[[r["flagged"], r["pct"], r["family"]] for r in rows],
         hovertemplate="<b>%{y}</b> (%{customdata[2]})<br>flags %{customdata[0]:,} customers "
@@ -538,7 +616,7 @@ def make_method_fig():
     fig.add_vline(x=BASELINE, line_dash="dash", line_color=T.INK, layer="below",
                   annotation_text=f"baseline {BASELINE:.1f}%", annotation_font_size=10.5,
                   annotation_position="bottom right")
-    fig.update_layout(height=340, xaxis_title="churn rate among flagged customers (%)",
+    fig.update_layout(height=340, xaxis_title="churn rate among flagged (%)",
                       xaxis_range=[0, 84], margin=dict(l=10, r=30, t=8, b=10))
     return fig
 
@@ -558,15 +636,24 @@ def make_composite_fig():
                 customdata=c["n"],
                 hovertemplate="flagged by %{x} methods<br>churn %{y}%<br>%{customdata:,} "
                               "customers<extra></extra>")
-    fig.add_annotation(x="2", y=c["churn_pct"][2] + 13, text="<b>peak risk here</b><br>(IF + DBSCAN agree)",
-                       showarrow=False, font=dict(size=11, color=T.RED))
-    fig.add_annotation(x="4", y=c["churn_pct"][4] + 27, text="'full consensus' =<br>mostly benign retirees",
-                       showarrow=False, font=dict(size=10.5, color=T.INK2))
+    fig.add_annotation(
+        x="2", y=88,
+        text="<b>Peak risk</b><br>IF + DBSCAN",
+        showarrow=False,
+        bgcolor="rgba(255,255,255,.94)", bordercolor=T.RED, borderpad=4,
+        font=dict(size=10.5, color=T.RED),
+    )
+    fig.add_annotation(
+        x="4", y=40,
+        text="All 4:<br>low risk",
+        showarrow=False,
+        bgcolor="rgba(255,255,255,.94)", bordercolor=T.LINE, borderpad=4,
+        font=dict(size=10, color=T.INK2),
+    )
     fig.update_layout(height=320,
-                      xaxis_title="how many of the 4 core methods flagged the customer "
-                                  "(bank average churn = 20.4%)",
-                      yaxis_title="churn rate (%)", yaxis_range=[0, 92],
-                      margin=dict(l=10, r=14, t=8, b=10))
+                      xaxis_title="number of methods agreeing",
+                      yaxis_title="churn rate (%)", yaxis_range=[0, 102],
+                      margin=dict(l=10, r=14, t=16, b=10))
     return fig
 
 
@@ -575,8 +662,8 @@ COMPOSITE_FIG = make_composite_fig()
 
 def make_unimv_fig():
     u = M["uni_mv"]
-    labels = ["Flagged by neither family", "Univariate only<br>(one extreme value)",
-              "Both families", "Multivariate only<br>(unusual combination)"]
+    labels = ["Neither<br>family", "One-value<br>only",
+              "Both<br>families", "Combination<br>only"]
     fig = _base(320)
     fig.add_bar(x=labels, y=u["churn_pct"],
                 marker_color=["#B7BEC9", "#7FA0FF", T.AMBER, T.RED],
@@ -584,7 +671,7 @@ def make_unimv_fig():
                       for v, n in zip(u["churn_pct"], u["n"])],
                 textposition="outside", textfont=dict(size=11),
                 hoverinfo="skip")
-    _baseline_hline(fig)
+    _baseline_hline(fig, text=f"avg {BASELINE:.1f}%", pos="bottom right")
     fig.update_layout(height=320, yaxis_title="churn rate (%)", yaxis_range=[0, 58],
                       margin=dict(l=10, r=14, t=8, b=10))
     return fig
@@ -636,16 +723,23 @@ def make_class_donut():
         "A: Suspected data error": int(flagged["Anomaly_Class"].str.startswith("A").sum()),
     }
     fig = _base(300)
-    fig.add_pie(labels=list(counts.keys()), values=list(counts.values()), hole=0.62,
+    values = list(counts.values())
+    total = sum(values)
+    fig.add_pie(labels=list(counts.keys()), values=values, hole=0.62,
                 marker=dict(colors=[T.RED, T.AMBER, T.PURPLE],
                             line=dict(color="white", width=2)),
-                texttemplate="%{percent:.1%}", textfont=dict(size=12),
+                texttemplate=[f"{value / total:.1%}" if value else "" for value in values],
+                textfont=dict(size=12),
                 hovertemplate="<b>%{label}</b><br>%{value:,} records (%{percent})<extra></extra>")
     fig.add_annotation(text=f"<b>{len(flagged):,}</b><br><span style='font-size:11px;"
                             f"color:{T.INK2}'>flagged<br>records</span>",
                        showarrow=False, font=dict(size=20))
-    fig.update_layout(height=300, legend=dict(orientation="v", y=0.5, x=1.02),
-                      margin=dict(l=10, r=10, t=10, b=10))
+    fig.update_layout(
+        height=320,
+        legend=dict(orientation="h", y=-0.04, yanchor="top",
+                    x=0.5, xanchor="center"),
+        margin=dict(l=10, r=10, t=10, b=46),
+    )
     return fig
 
 
@@ -690,7 +784,12 @@ def make_crossref_fig():
     noise = [M["cross_ref"]["noise_by_cluster"].get(str(k), 0) for k in ks]
     share = [n / M["clusters"][str(k)]["n"] * 100 for n, k in zip(noise, ks)]
     fig = _base(300)
-    fig.add_bar(x=[f"C{k} - {T.CLUSTER_SHORT[k].split('· ')[1]}" for k in ks], y=noise,
+    labels = {
+        1: "C1<br>single-product",
+        0: "C0<br>Germany-skew",
+        2: "C2<br>zero-balance",
+    }
+    fig.add_bar(x=[labels[k] for k in ks], y=noise,
                 marker_color=[T.CLUSTER_COLORS[k] for k in ks],
                 text=[f"{n:,}<br><span style='font-size:10px'>{s:.1f}% of segment</span>"
                       for n, s in zip(noise, share)],

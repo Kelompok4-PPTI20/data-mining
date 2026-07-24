@@ -220,10 +220,11 @@ button {
    GRID — 8px rhythm
    ========================================================================== */
 .grid { display: grid; gap: 16px; margin-bottom: 16px; }
-.g2 { grid-template-columns: 1fr 1fr; }
-.g2-wide { grid-template-columns: 1.6fr 1fr; }
-.g2-narrow { grid-template-columns: 1fr 1.6fr; }
-.g3 { grid-template-columns: repeat(3, 1fr); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g2-wide { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.g2-narrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid > *, .card, .card-body { min-width: 0; }
 
 /* ==========================================================================
    STAT BAND — one region, hairline dividers (replaces N separate KPI cards)
@@ -270,11 +271,26 @@ button {
   padding: 14px 24px 12px;
   border-bottom: 1px solid var(--border-200);
 }
-.card-title { font-size: 14px; font-weight: 600; letter-spacing: -.01em; color: var(--ink-900); }
+.card-title {
+  font-size: 14px; font-weight: 600; letter-spacing: -.01em;
+  line-height: 1.35; color: var(--ink-900);
+}
 .card-body { padding: 16px 24px 20px; }
 .card--plain .card-body { padding-top: 20px; }
 .card-sub { font-size: 13px; color: var(--ink-500); line-height: 1.55; margin: 0 0 12px;
             max-width: 92ch; }
+
+/* Dense analytical charts keep a readable internal canvas on narrow screens.
+   Only the chart scrolls; the title, explanation and insight continue to wrap. */
+.chart-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.chart-scroll:focus-visible { box-shadow: var(--focus-ring); border-radius: var(--r-md); }
 
 /* ==========================================================================
    INSIGHT STRIPS (inside cards) & CALLOUTS (standalone) — same voice,
@@ -432,7 +448,13 @@ button {
 /* ==========================================================================
    TABLES — enterprise style; rule rows are click targets
    ========================================================================== */
-.table-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
 .dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
 .dtable th {
   text-align: left;
@@ -455,7 +477,21 @@ button {
 .dtable tbody tr:hover td { background: var(--surface-50); }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums;
        font-weight: 500; color: var(--ink-900); }
-td.num { text-align: right; }
+.dtable th.num, .dtable td.num { text-align: right; }
+
+/* Five-column action plan: narrative columns align from the same top edge and
+   retain stable proportions instead of squeezing into unreadable slivers. */
+.dtable--actions { min-width: 960px; table-layout: fixed; }
+.dtable--actions th, .dtable--actions td { vertical-align: top; }
+.dtable--actions th:nth-child(1), .dtable--actions td:nth-child(1) {
+  width: 5%;
+  text-align: center;
+}
+.dtable--actions th:nth-child(2), .dtable--actions td:nth-child(2) { width: 20%; }
+.dtable--actions th:nth-child(3), .dtable--actions td:nth-child(3) { width: 27%; }
+.dtable--actions th:nth-child(4), .dtable--actions td:nth-child(4) { width: 21%; }
+.dtable--actions th:nth-child(5), .dtable--actions td:nth-child(5) { width: 27%; }
+.metric-cell { font-variant-numeric: tabular-nums; }
 
 /* selectable rule rows */
 .rrow { cursor: pointer; }
@@ -593,10 +629,19 @@ ul.tight li b { color: var(--ink-900); font-weight: 600; }
 /* ==========================================================================
    RESPONSIVE — panels degrade, columns stack, never page-level h-scroll
    ========================================================================== */
+/* Account for the 264px sidebar: half-width cards become too narrow well
+   before the viewport itself reaches the old 1150px breakpoint. */
+@media (max-width: 1600px) {
+  .g2, .g2-wide, .g2-narrow { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1280px) {
+  .g3 { grid-template-columns: minmax(0, 1fr); }
+  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 1150px) {
   .statband { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-  .g2, .g3, .g2-wide, .g2-narrow { grid-template-columns: 1fr; }
-  .pipeline { grid-template-columns: repeat(2, 1fr); }
   .hdr-chips { display: none; }
   .page-head { flex-direction: column; gap: 10px; }
   .ph-chips { justify-content: flex-start; max-width: none; }
@@ -619,7 +664,7 @@ ul.tight li b { color: var(--ink-900); font-weight: 600; }
 
 @media (max-width: 767px) {
   .statband { grid-template-columns: 1fr; }
-  .pipeline { grid-template-columns: 1fr; }
+  .pipeline { grid-template-columns: minmax(0, 1fr); }
   .brand-zone { flex: 0 0 auto; }
   .hdr-context { display: none; }
   .hero { padding: 24px 22px; }
@@ -627,6 +672,7 @@ ul.tight li b { color: var(--ink-900); font-weight: 600; }
   .herostats { gap: 12px 24px; }
   .card-head, .card-body { padding-left: 16px; padding-right: 16px; }
   .banner { padding: 20px 18px; }
+  .section-row { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
