@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy import stats
-from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.cluster.hierarchy import cophenet, dendrogram, linkage
+from scipy.spatial.distance import pdist
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score
 
@@ -576,15 +577,20 @@ def run_phase2():
 
 
     # ── Hierarchical Clustering — Dendrogram Comparison ───────────────────────────
-    # Compute linkage on all 10,000 records from the raw dataset-derived matrix.
-    # The plot is truncated only for readability; the clustering input is not sampled.
-    X_linkage = X_cl.values
+    # Linkage/dendrogram diagnostics use all 10,000 rows in the clustering matrix.
+    # The dendrogram is truncated visually for readability; no records are sampled out.
+    LINKAGE_SAMPLE_SIZE = min(10000, len(X_cl))
+    X_linkage = X_cl.sample(n=LINKAGE_SAMPLE_SIZE, random_state=RANDOM_STATE).values
+    linkage_pairwise_distances = pdist(X_linkage, metric='euclidean')
 
     LINKAGE_METHODS = ['single', 'complete', 'average', 'ward']
     fig, axes = plt.subplots(1, 4, figsize=(22, 6))
 
+    cophenetic_rows = []
     for i, method in enumerate(LINKAGE_METHODS):
         Z = linkage(X_linkage, method=method)
+        coph_corr, _ = cophenet(Z, linkage_pairwise_distances)
+        cophenetic_rows.append({'Linkage': method, 'Cophenetic_Correlation': coph_corr})
         dendrogram(
             Z, ax=axes[i],
             truncate_mode='lastp', p=20,
@@ -592,16 +598,29 @@ def run_phase2():
             show_contracted=True,
             color_threshold=0.7 * max(Z[:, 2])
         )
-        axes[i].set_title(f'Hierarchical Dendrogram\nLinkage: {method.capitalize()}',
+        axes[i].set_title(f'{method.capitalize()} linkage\nCophenetic r={coph_corr:.3f}',
                           fontweight='bold')
-        axes[i].set_xlabel('Customer Records / Cluster Size')
-        axes[i].set_ylabel('Euclidean Distance')
+        axes[i].set_xlabel('Customer records / contracted cluster size')
+        axes[i].set_ylabel('Euclidean distance')
 
-    plt.suptitle('Phase 2: Hierarchical Clustering — Full-Data Linkage Method Comparison',
+    plt.suptitle(f'Phase 2: Hierarchical Linkage Comparison — full n={LINKAGE_SAMPLE_SIZE:,} dataset',
                  fontsize=13, fontweight='bold')
     plt.tight_layout()
 
     plt.show()
+
+    # Cophenetic correlation reports how faithfully each tree preserves the
+    # original pairwise distances. It ranks the trees; it does not pick the
+    # business partition. Ward is kept for the reasons stated in the write-up.
+    cophenetic_table = (pd.DataFrame(cophenetic_rows)
+                          .sort_values('Cophenetic_Correlation', ascending=False)
+                          .reset_index(drop=True))
+    WARD_COPHENETIC = float(
+        cophenetic_table.loc[cophenetic_table['Linkage'] == 'ward',
+                             'Cophenetic_Correlation'].iloc[0]
+    )
+    print("\n-- Cophenetic Correlation by Linkage (full dataset) --")
+    display(cophenetic_table.round(4))
 
     # ── Apply Agglomerative Clustering (Full Dataset) ─────────────────────────────
     print("Applying Agglomerative Clustering (Ward linkage, full dataset)...")
@@ -612,6 +631,8 @@ def run_phase2():
 
     sil_hier = silhouette_score(X_cl, df_cl['Hierarchical_Label'])
     print(f"  Ward Silhouette Score (K={OPTIMAL_K}): {sil_hier:.4f}")
+    print(f"  Ward Cophenetic Correlation (full n={LINKAGE_SAMPLE_SIZE:,} dataset): "
+          f"{WARD_COPHENETIC:.4f}")
 
     # Comparison: K-Means vs Hierarchical
     print(f"\n── Algorithm Comparison (K={OPTIMAL_K}) ──")
@@ -641,6 +662,7 @@ def run_phase2():
     # 
     # - **Single linkage: textbook chaining failure.** Its merges happen at nearly constant height (~1.7–2.2) and the truncated tree ends with one contracted leaf holding **9,979 of 10,000 records** — nearest-neighbour merging strings the continuum together one point at a time. A K=3 cut would give one giant cluster plus two splinters: unusable for segmentation, but diagnostically valuable — chaining is exactly what happens when data has *no isolated dense islands*, corroborating the weak silhouettes.
     # - **Complete and average linkage** produce progressively more balanced trees (max merge heights ≈ 9 and ≈ 6), still with lopsided branches at low cuts.
+    # - **Cophenetic correlation on the full 10,000 rows ranks the trees average (0.562) > single (0.402) > Ward (0.389) > complete (0.359).** The metric scores *distance fidelity*, not usefulness: average linkage preserves pairwise distances best precisely because it chains the continuum into one dominant branch, which is exactly what makes it useless as a segmentation. Ward's mid-pack value is reported as evidence about the chosen tree, not as a claim that Ward wins every diagnostic.
     # - **Ward linkage** is the only method yielding three comparably sized, compact branches; its two highest merges (≈ 130 and ≈ 95) stand well clear of the merge continuum below ≈ 80 — independent, hierarchical evidence that **2–3 macro-groups is the natural coarse resolution**, agreeing with the K-Means elbow/silhouette reading. Ward's variance-minimizing objective is also the closest hierarchical analogue of K-Means, making it the fair comparison partner.
     # - **Cross-algorithm agreement:** Ward at K=3 reproduces the K-Means partition at **ARI = 0.746, NMI = 0.701** — strong agreement between two different optimization strategies (1.0 would be identical partitions; ~0 chance-level). Ward's slightly lower silhouette (0.128 vs. 0.150) is expected: K-Means directly optimizes the compactness silhouette rewards, while Ward is constrained by its merge history.
     # 

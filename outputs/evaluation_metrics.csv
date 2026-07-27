@@ -6,7 +6,7 @@ Phase 1,Duplicate rows,0.0,records,Exact duplicate raw rows.,phase1_preprocessin
 Phase 1,Missing values,0.0,cells,Null cells before preprocessing.,phase1_preprocessing.ipynb
 Phase 1,Raw rows audited,10000.0,records,Rows read from the raw Kaggle snapshot.,phase1_preprocessing.ipynb
 Phase 2,Adjusted Rand Index (K-Means vs Ward),0.7461064071371284,score,Full-data partition agreement adjusted for chance.,phase2_clustering.ipynb
-Phase 2,Cophenetic correlation (Ward),0.3943564720543238,correlation,"Ward tree on deterministic n=2,000 diagnostic sample.",phase2_clustering.ipynb
+Phase 2,Cophenetic correlation (Ward),0.38873170730321677,correlation,"Ward tree on the full n=10,000 dataset.",phase2_clustering.ipynb
 Phase 2,DBSCAN epsilon,1.25,standardized distance,Tested value nearest the 10-NN distance knee (1.2965).,phase2_clustering.ipynb
 Phase 2,DBSCAN noise records,554.0,records,Full-data density-noise records passed to Phase 4.,phase2_clustering.ipynb
 Phase 2,Normalized Mutual Information (K-Means vs Ward),0.7014239043967168,score,Full-data information agreement between partitions.,phase2_clustering.ipynb
